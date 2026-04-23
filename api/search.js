@@ -9,24 +9,44 @@ export default async function handler(req, res) {
   const { query } = req.body;
   if (!query) return res.status(400).json({ error: 'query is required' });
 
-  const system = `You are a Korean pharmaceutical database API. When given a drug name in Korean, return ONLY a JSON array. No explanations, no markdown, no code blocks. Response must start with [ and end with ].`;
-
-  const user = `약품명: "${query}"
-
-위 약품의 식약처 낱알식별 정보를 JSON 배열로 반환하세요. 실제 존재하는 약품 데이터를 제공하세요. 용량별 최대 6개.
-
-반드시 아래 형식의 JSON 배열만 반환:
-[{"ITEM_NAME":"트라젠타정5mg","ENTP_NAME":"베링거인겔하임","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","ITEM_IMAGE":null}]
-
-- LNGS_STDR: 장축mm (숫자)
-- SHRT_STDR: 단축mm (숫자)
-- THICK: 두께mm (숫자 또는 null)
-- DRUG_SHPE: 원형/타원형/장방형/마름모형 중 하나
-- DRUG_COLO: 하양/노랑/주황/분홍/빨강/갈색/초록/파랑/보라/회색/검정/살구 중 하나
-- 없으면 []`;
-
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // 식약처 공식 낱알식별 API 직접 호출
+    const params = new URLSearchParams({
+      serviceKey: process.env.MFDS_API_KEY,
+      item_name: query,
+      type: 'json',
+      numOfRows: '10',
+      pageNo: '1'
+    });
+
+    const url = `https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?${params}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    // 응답 파싱
+    let items = [];
+    if (data?.body?.items) {
+      items = Array.isArray(data.body.items) ? data.body.items : [data.body.items];
+    } else if (data?.response?.body?.items?.item) {
+      const raw = data.response.body.items.item;
+      items = Array.isArray(raw) ? raw : [raw];
+    }
+
+    // 크기 정보 있는 것만 필터링
+    const result = items.filter(it => it.LNGS_STDR && it.SHRT_STDR);
+
+    if (result.length > 0) {
+      // 식약처 공식 데이터 반환
+      return res.status(200).json(result);
+    }
+
+    // 식약처에서 결과 없으면 Claude AI로 보완
+    const system = `You are a Korean pharmaceutical database API. Return ONLY a JSON array. No explanations, no markdown. Start with [ end with ].`;
+    const user = `약품명: "${query}" 의 식약처 낱알식별 정보를 JSON 배열로 반환. 용량별 최대 6개.
+[{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","ITEM_IMAGE":null}]
+없으면[].`;
+
+    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -41,15 +61,15 @@ export default async function handler(req, res) {
       })
     });
 
-    const data = await response.json();
-    if (data.error) return res.status(500).json({ error: data.error.message });
+    const aiData = await aiRes.json();
+    if (aiData.error) return res.status(200).json([]);
 
-    const text = (data.content || []).map(b => b.text || '').join('');
+    const text = (aiData.content || []).map(b => b.text || '').join('');
     const match = text.match(/\[[\s\S]*\]/);
     if (!match) return res.status(200).json([]);
 
-    const result = JSON.parse(match[0]);
-    return res.status(200).json(result);
+    return res.status(200).json(JSON.parse(match[0]));
+
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
