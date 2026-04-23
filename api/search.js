@@ -10,7 +10,6 @@ export default async function handler(req, res) {
   if (!query) return res.status(400).json({ error: 'query is required' });
 
   try {
-    // 식약처 공식 낱알식별 API 직접 호출
     const params = new URLSearchParams({
       serviceKey: process.env.MFDS_API_KEY,
       item_name: query,
@@ -23,7 +22,6 @@ export default async function handler(req, res) {
     const response = await fetch(url);
     const data = await response.json();
 
-    // 응답 파싱
     let items = [];
     if (data?.body?.items) {
       items = Array.isArray(data.body.items) ? data.body.items : [data.body.items];
@@ -32,18 +30,30 @@ export default async function handler(req, res) {
       items = Array.isArray(raw) ? raw : [raw];
     }
 
-    // 크기 정보 있는 것만 필터링
-    const result = items.filter(it => it.LNGS_STDR && it.SHRT_STDR);
+    const result = items
+      .filter(it => it.LNGS_STDR && it.SHRT_STDR)
+      .map(it => {
+        let ingredientEn = "";
+        if (it.MATERIAL_NAME) {
+          const parts = it.MATERIAL_NAME.split(/[|,;\/]/);
+          const engParts = parts
+            .map(p => p.trim())
+            .filter(p => /[a-zA-Z]/.test(p) && p.length > 1);
+          ingredientEn = engParts.join(" / ");
+        }
+        return {
+          ...it,
+          INGR_NAME_EN: ingredientEn || it.CLASS_NAME || "",
+          ITEM_IMAGE: it.ITEM_IMAGE ||
+            (it.ITEM_SEQ ? `https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/${it.ITEM_SEQ}` : null)
+        };
+      });
 
-    if (result.length > 0) {
-      // 식약처 공식 데이터 반환
-      return res.status(200).json(result);
-    }
+    if (result.length > 0) return res.status(200).json(result);
 
-    // 식약처에서 결과 없으면 Claude AI로 보완
     const system = `You are a Korean pharmaceutical database API. Return ONLY a JSON array. No explanations, no markdown. Start with [ end with ].`;
     const user = `약품명: "${query}" 의 식약처 낱알식별 정보를 JSON 배열로 반환. 용량별 최대 6개.
-[{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","ITEM_IMAGE":null}]
+[{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","INGR_NAME_EN":"Linagliptin","MATERIAL_NAME":"리나글립틴|Linagliptin","ITEM_IMAGE":null}]
 없으면[].`;
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -63,11 +73,9 @@ export default async function handler(req, res) {
 
     const aiData = await aiRes.json();
     if (aiData.error) return res.status(200).json([]);
-
     const text = (aiData.content || []).map(b => b.text || '').join('');
     const match = text.match(/\[[\s\S]*\]/);
     if (!match) return res.status(200).json([]);
-
     return res.status(200).json(JSON.parse(match[0]));
 
   } catch (e) {
