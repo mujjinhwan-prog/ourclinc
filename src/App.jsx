@@ -73,34 +73,14 @@ function adj(hex, p) {
 const ACCENT = ["#3b5bdb","#7048e8","#0ca678","#e67700","#c2255c","#1098ad"];
 
 async function fetchDrug(query) {
-  const system = `당신은 한국 식약처 의약품 낱알식별 데이터베이스 API입니다.
-사용자가 약품명을 입력하면 반드시 JSON 배열만 반환하세요.
-절대로 설명, 마크다운, 코드블록, 주석을 포함하지 마세요.
-응답의 첫 글자는 반드시 [ 이고 마지막 글자는 반드시 ] 이어야 합니다.`;
-
-  const user = `"${query}" 약품의 식약처 낱알식별 정보를 JSON 배열로 반환하세요. 용량/제조사별 최대 6개.
-
-형식(숫자는 반드시 숫자 타입, 문자열은 큰따옴표):
-[{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.5,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","ITEM_IMAGE":null}]
-
-DRUG_COLO는 단순 한 단어로: 하양/노랑/주황/분홍/빨강/갈색/연두/초록/하늘/파랑/남색/보라/회색/검정/살구 중 하나.
-결과 없으면 [].`;
-
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      model:"claude-sonnet-4-20250514", max_tokens:1500,
-      system,
-      messages:[{role:"user", content:user}]
-    })
+  const r = await fetch("/api/search", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({query})
   });
-  const d = await r.json();
-  const raw_txt = (d.content||[]).map(b=>b.text||"").join("");
-
-  // JSON 배열만 추출 (설명 텍스트가 섞여도 안전하게 파싱)
-  const match = raw_txt.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error("응답에서 JSON을 찾을 수 없습니다");
-  const raw = JSON.parse(match[0]);
+  if (!r.ok) throw new Error("서버 오류: " + r.status);
+  const raw = await r.json();
+  if (raw.error) throw new Error(raw.error);
 
   return raw.filter(it=>it.LNGS_STDR&&it.SHRT_STDR).map((it,i)=>({
     id:(it.ITEM_NAME||"p")+"_"+i,
