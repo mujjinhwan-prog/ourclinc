@@ -202,7 +202,7 @@ function PillCard({ pill, pxPerMm, accentColor, index }) {
           </span>
           · {pill.width}×{pill.height}mm{pill.thickness?`×${pill.thickness}`:""}
         </div>
-        <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{pill.company}</div>
+        {pill.ingredient&&<div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{pill.ingredient}</div>}
       </div>
     </div>
   );
@@ -341,9 +341,9 @@ export default function App() {
                             {r.name}{added?" ✓":""}</div>
                           <div style={{fontSize:11,color:"#94a3b8",fontFamily:"monospace",marginTop:2,
                             display:"flex",alignItems:"center",gap:4}}>
-                            {r.company}
+                            {r.ingredient&&<span>{r.ingredient}</span>}
                             {r.colorName&&<>
-                              <span>·</span>
+                              {r.ingredient&&<span>·</span>}
                               <span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",
                                 background:r.color,border:"1px solid rgba(0,0,0,0.12)",
                                 boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}/>
@@ -474,6 +474,7 @@ export default function App() {
                   </span>
                   <span>·</span>
                   <span>{p.width}×{p.height}mm{p.thickness?`×${p.thickness}mm`:""}</span>
+                  {p.ingredient&&<><span>·</span><span style={{color:"#94a3b8"}}>{p.ingredient}</span></>}
                 </div>
               ))}
             </div>
@@ -483,4 +484,3 @@ export default function App() {
     </div>
   );
 }
- 
