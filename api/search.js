@@ -35,17 +35,14 @@ export default async function handler(req, res) {
       .map(it => {
         let ingredientEn = "";
         if (it.MATERIAL_NAME) {
-          const parts = it.MATERIAL_NAME.split(/[|,;\/]/);
-          const engParts = parts
-            .map(p => p.trim())
-            .filter(p => /[a-zA-Z]/.test(p) && p.length > 1);
+          const parts = it.MATERIAL_NAME.split(/[|,;/]/);
+          const engParts = parts.map(p => p.trim()).filter(p => /[a-zA-Z]/.test(p) && p.length > 1);
           ingredientEn = engParts.join(" / ");
         }
         return {
           ...it,
           INGR_NAME_EN: ingredientEn || it.CLASS_NAME || "",
-          ITEM_IMAGE: it.ITEM_IMAGE ||
-            (it.ITEM_SEQ ? `https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/${it.ITEM_SEQ}` : null)
+          ITEM_IMAGE: it.ITEM_IMAGE || (it.ITEM_SEQ ? `https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/${it.ITEM_SEQ}` : null)
         };
       });
 
@@ -53,7 +50,7 @@ export default async function handler(req, res) {
 
     const system = `You are a Korean pharmaceutical database API. Return ONLY a JSON array. No explanations, no markdown. Start with [ end with ].`;
     const user = `약품명: "${query}" 의 식약처 낱알식별 정보를 JSON 배열로 반환. 용량별 최대 6개.
-[{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","INGR_NAME_EN":"Linagliptin","MATERIAL_NAME":"리나글립틴|Linagliptin","ITEM_IMAGE":null}]
+[{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","INGR_NAME_EN":"Linagliptin","ITEM_IMAGE":null}]
 없으면[].`;
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
