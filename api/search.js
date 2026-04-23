@@ -46,7 +46,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 2000,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
         system: '당신은 한국 의약품 정보 전문가입니다. 반드시 웹 검색을 사용해서 약품 정보를 찾으세요. 최종 답변은 JSON 배열만, 마크다운 없이, [ 로 시작 ] 로 끝내세요.',
@@ -63,13 +63,12 @@ export default async function handler(req, res) {
     if (aiData.error) return res.status(200).json([]);
 
     const text = (aiData.content || []).map(b => b.text || '').join('');
-    const match = text.match(/[[sS]*?]/);
+    const match = text.match(/[[sS]*]/);
     if (!match) return res.status(200).json([]);
 
     try {
       const parsed = JSON.parse(match[0]);
-      const filtered = parsed.filter(it => it.LNGS_STDR && it.SHRT_STDR);
-      return res.status(200).json(filtered);
+      return res.status(200).json(parsed.filter(it => it.LNGS_STDR && it.SHRT_STDR));
     } catch {
       return res.status(200).json([]);
     }
