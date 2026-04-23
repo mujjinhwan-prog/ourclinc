@@ -153,7 +153,7 @@ export default function App() {
       <div style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 20px",
         position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
         <div style={{maxWidth:860,margin:"0 auto",height:66,display:"flex",alignItems:"center",gap:14}}>
-          <img src="/yh_namu.png" alt="Voice of YUHAN"
+          <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="Voice of YUHAN"
             style={{height:54,width:"auto",objectFit:"contain",flexShrink:0,
               filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.12))",transition:"transform 0.2s"}}
             onMouseEnter={e=>e.target.style.transform="scale(1.05)"}
