@@ -25,125 +25,74 @@ async function fetchDrug(query) {
     name:it.ITEM_NAME||"", company:it.ENTP_NAME||"",
     width:parseFloat(it.LNGS_STDR)||0, height:parseFloat(it.SHRT_STDR)||0,
     thickness:it.THICK?parseFloat(it.THICK):null,
-    shape:parseShape(it.DRUG_SHPE),
+    shape:parseShape(it.DRUG_SHPE), shapeKr:it.DRUG_SHPE||"",
     colorName:it.DRUG_COLO||"",
     mark:(it.PRINT_FRONT||"")+(it.PRINT_BACK?" / "+it.PRINT_BACK:""),
-    ingredient: it.INGR_NAME_EN || it.MATERIAL_NAME || it.CLASS_NAME || "",
-    price: it.MAX_PRICE || it.UNIT_PRICE || null,
-    formName: it.FORM_CODE_NAME || "",
-    etcOtc: it.ETC_OTC_NAME || "",
-    chart: it.CHART || "",
-    imgUrl: it.ITEM_IMAGE || (it.ITEM_SEQ ? "https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/" + it.ITEM_SEQ : null),
+    ingredient:it.INGR_NAME_EN||it.MATERIAL_NAME||it.CLASS_NAME||"",
+    price:it.MAX_PRICE||it.UNIT_PRICE||null,
+    formName:it.FORM_CODE_NAME||"",
+    etcOtc:it.ETC_OTC_NAME||"",
+    imgUrl:it.ITEM_IMAGE||(it.ITEM_SEQ?"https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/"+it.ITEM_SEQ:null),
   }));
 }
 
-// 약 사진 카드 (동일 크기 사진)
-function PillPhotoCard({ pill, accentColor, index }) {
-  const [imgErr, setImgErr] = useState(false);
-  return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,
-      animation:"fadeUp 0.4s cubic-bezier(0.34,1.4,0.64,1) "+(index*0.08)+"s both",
-      minWidth:140, maxWidth:160}}>
-      {/* 약 사진 */}
-      <div style={{width:120,height:80,borderRadius:12,overflow:"hidden",
-        border:"2px solid "+accentColor+"44",
-        boxShadow:"0 4px 16px rgba(0,0,0,0.12)",
-        background:"#f0f0f0",display:"flex",alignItems:"center",justifyContent:"center",
-        position:"relative"}}>
-        {pill.imgUrl && !imgErr ? (
-          <img src={pill.imgUrl} alt={pill.name} onError={()=>setImgErr(true)}
-            style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-        ) : (
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-            <span style={{fontSize:28}}>💊</span>
-            <span style={{fontSize:9,color:"#94a3b8",textAlign:"center"}}>이미지 없음</span>
-          </div>
-        )}
-        {/* 전문/일반 배지 */}
-        {pill.etcOtc && (
-          <div style={{position:"absolute",top:4,right:4,
-            background: pill.etcOtc.includes("전문") ? "#fee2e2" : "#dcfce7",
-            color: pill.etcOtc.includes("전문") ? "#dc2626" : "#16a34a",
-            fontSize:9,fontWeight:700,padding:"2px 5px",borderRadius:4}}>
-            {pill.etcOtc.includes("전문") ? "전문" : "일반"}
-          </div>
-        )}
-      </div>
-      {/* 이름 + 정보 */}
-      <div style={{textAlign:"center",width:"100%"}}>
-        <div style={{fontSize:11,fontWeight:700,color:accentColor,lineHeight:1.3,marginBottom:3}}>{pill.name}</div>
-        {pill.formName && <div style={{fontSize:10,color:"#3b5bdb",background:"#eff6ff",
-          borderRadius:4,padding:"1px 6px",display:"inline-block",marginBottom:3}}>{pill.formName}</div>}
-        <div style={{fontSize:10,color:"#64748b",fontFamily:"monospace"}}>
-          {pill.colorName}
-        </div>
-        {pill.price && <div style={{fontSize:10,color:"#e67700",fontWeight:700,marginTop:2}}>
-          💰 {Number(pill.price).toLocaleString()}원
-        </div>}
-      </div>
-    </div>
-  );
-}
-
-// 실제 크기 형상 카드
-function PillSizeCard({ pill, pxPerMm, accentColor, index }) {
+function PillShape({ pill, pxPerMm, accentColor }) {
   const wPx = pill.width * pxPerMm;
   const hPx = pill.height * pxPerMm;
   let borderRadius = "50%", clipPath = "";
   if (pill.shape==="oblong") borderRadius = Math.min(wPx,hPx)*0.5+"px";
   if (pill.shape==="diamond") { borderRadius="4px"; clipPath="polygon(50% 0%,100% 50%,50% 100%,0% 50%)"; }
   if (pill.shape==="pentagon"||pill.shape==="hexagon") borderRadius="20%";
-
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,
-      animation:"fadeUp 0.4s cubic-bezier(0.34,1.4,0.64,1) "+(index*0.08)+"s both"}}>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
       <div style={{position:"relative",display:"flex",alignItems:"flex-start"}}>
-        {/* 약 형상 */}
-        <div style={{
-          width:wPx, height:hPx, borderRadius, clipPath:clipPath||undefined,
-          flexShrink:0,
-          background:"linear-gradient(145deg,#ffffff 0%,#f0f0f0 50%,#e0e0e0 100%)",
-          boxShadow:"0 4px 16px rgba(0,0,0,0.15),inset 0 1px 3px rgba(255,255,255,0.9)",
-          outline:"2.5px solid "+accentColor+"66", outlineOffset:4,
-          border:"1px solid #d0d0d0",
-          display:"flex",alignItems:"center",justifyContent:"center",
-          position:"relative",overflow:"hidden"}}>
+        <div style={{width:wPx,height:hPx,borderRadius,clipPath:clipPath||undefined,flexShrink:0,
+          background:"linear-gradient(145deg,#fff 0%,#f0f0f0 50%,#e0e0e0 100%)",
+          boxShadow:"0 3px 12px rgba(0,0,0,0.15),inset 0 1px 3px rgba(255,255,255,0.9)",
+          outline:"2px solid "+accentColor+"55",outlineOffset:3,border:"1px solid #d0d0d0",
+          display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative"}}>
           <div style={{position:"absolute",top:"8%",left:"15%",right:"30%",height:"12%",
             background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.9),transparent)",
-            borderRadius:99,filter:"blur(1px)",transform:"rotate(-8deg)",pointerEvents:"none"}}/>
+            borderRadius:99,filter:"blur(1px)",transform:"rotate(-8deg)"}}/>
           <span style={{position:"relative",zIndex:1,fontFamily:"monospace",fontWeight:700,
-            fontSize:Math.max(7,Math.min(wPx,hPx)*0.18),color:"rgba(80,80,80,0.7)",
-            userSelect:"none",letterSpacing:-0.5,lineHeight:1}}>
+            fontSize:Math.max(6,Math.min(wPx,hPx)*0.17),color:"rgba(80,80,80,0.7)",userSelect:"none"}}>
             {(pill.mark||"").split("/")[0].trim()}
           </span>
         </div>
-        {/* 세로 눈금 */}
-        <div style={{position:"absolute",right:-32,top:0,height:hPx,display:"flex",alignItems:"center",gap:3}}>
-          <div style={{width:2,height:"100%",background:accentColor+"cc",borderRadius:1,position:"relative"}}>
-            <div style={{position:"absolute",left:-4,top:0,width:10,height:2,background:accentColor+"cc",borderRadius:1}}/>
-            <div style={{position:"absolute",left:-4,bottom:0,width:10,height:2,background:accentColor+"cc",borderRadius:1}}/>
+        <div style={{position:"absolute",right:-26,top:0,height:hPx,display:"flex",alignItems:"center",gap:2}}>
+          <div style={{width:2,height:"100%",background:accentColor+"bb",borderRadius:1,position:"relative"}}>
+            <div style={{position:"absolute",left:-3,top:0,width:8,height:2,background:accentColor+"bb",borderRadius:1}}/>
+            <div style={{position:"absolute",left:-3,bottom:0,width:8,height:2,background:accentColor+"bb",borderRadius:1}}/>
           </div>
-          <span style={{fontFamily:"monospace",fontSize:10,color:accentColor,fontWeight:700,
+          <span style={{fontFamily:"monospace",fontSize:9,color:accentColor,fontWeight:700,
             writingMode:"vertical-rl",transform:"rotate(180deg)",lineHeight:1,whiteSpace:"nowrap"}}>
             {pill.height}mm
           </span>
         </div>
       </div>
-      {/* 가로 눈금 */}
-      <div style={{width:wPx,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-        <div style={{width:"100%",height:2,background:accentColor+"cc",borderRadius:1,position:"relative"}}>
-          <div style={{position:"absolute",left:0,top:-4,width:2,height:10,background:accentColor+"cc",borderRadius:1}}/>
-          <div style={{position:"absolute",right:0,top:-4,width:2,height:10,background:accentColor+"cc",borderRadius:1}}/>
+      <div style={{width:wPx,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+        <div style={{width:"100%",height:2,background:accentColor+"bb",borderRadius:1,position:"relative"}}>
+          <div style={{position:"absolute",left:0,top:-3,width:2,height:8,background:accentColor+"bb",borderRadius:1}}/>
+          <div style={{position:"absolute",right:0,top:-3,width:2,height:8,background:accentColor+"bb",borderRadius:1}}/>
         </div>
-        <span style={{fontFamily:"monospace",fontSize:11,color:accentColor,fontWeight:700}}>{pill.width}mm</span>
+        <span style={{fontFamily:"monospace",fontSize:10,color:accentColor,fontWeight:700}}>{pill.width}mm</span>
       </div>
-      <div style={{textAlign:"center",maxWidth:160}}>
-        <div style={{fontSize:11,fontWeight:700,color:accentColor,marginBottom:2}}>{pill.name}</div>
-        <div style={{fontSize:10,color:"#64748b",fontFamily:"monospace"}}>
-          {pill.width}x{pill.height}mm{pill.thickness?"x"+pill.thickness:""}
-        </div>
-        {pill.ingredient&&<div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>{pill.ingredient}</div>}
-      </div>
+    </div>
+  );
+}
+
+function PillPhoto({ pill }) {
+  const [err, setErr] = useState(false);
+  return (
+    <div style={{width:100,height:70,borderRadius:10,overflow:"hidden",
+      border:"1.5px solid #e2e8f0",background:"#f8f8f8",
+      display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      {pill.imgUrl && !err ? (
+        <img src={pill.imgUrl} alt={pill.name} onError={()=>setErr(true)}
+          style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+      ) : (
+        <span style={{fontSize:28,opacity:0.4}}>💊</span>
+      )}
     </div>
   );
 }
@@ -187,20 +136,39 @@ export default function App() {
     const ppm=v/25.4;setPxPerMm(ppm);setDpiInfo(v+" PPI (수동) · "+ppm.toFixed(2)+"px/mm");};
   const oneCm=pxPerMm*10;
 
+  // 테이블 행 정의
+  const ROWS = [
+    { key:"photo",    label:"약품 사진" },
+    { key:"size",     label:"실제 크기" },
+    { key:"name",     label:"품목명" },
+    { key:"etcOtc",   label:"구분" },
+    { key:"formName", label:"제형" },
+    { key:"colorName",label:"색상" },
+    { key:"mark",     label:"각인" },
+    { key:"ingredient",label:"주성분" },
+    { key:"price",    label:"약가" },
+    { key:"company",  label:"업체명" },
+  ];
+
   return (
     <div style={{fontFamily:"'Noto Sans KR',sans-serif",background:"#f0f4f8",minHeight:"100vh",color:"#1a1f36"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-        @keyframes fadeUp{from{opacity:0;transform:translateY(20px) scale(0.82)}to{opacity:1;transform:none}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
         @keyframes dropIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
         @keyframes spin{to{transform:rotate(360deg)}}
         *{box-sizing:border-box}
+        .compare-table{width:100%;border-collapse:collapse;table-layout:fixed}
+        .compare-table th,.compare-table td{padding:11px 14px;border-bottom:1px solid #f1f5f9;vertical-align:middle;text-align:center}
+        .compare-table th{background:#f8fafc;font-size:11px;font-weight:700;color:#64748b;text-align:left;width:90px;border-right:1px solid #f1f5f9;white-space:nowrap}
+        .compare-table tr:last-child th,.compare-table tr:last-child td{border-bottom:none}
+        .compare-table tr:hover td{background:#fafbff}
       `}</style>
 
       {/* 헤더 */}
       <div style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 20px",
         position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
-        <div style={{maxWidth:900,margin:"0 auto",height:66,display:"flex",alignItems:"center",gap:14}}>
+        <div style={{maxWidth:960,margin:"0 auto",height:66,display:"flex",alignItems:"center",gap:14}}>
           <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="Voice of YUHAN"
             style={{height:54,width:"auto",objectFit:"contain",flexShrink:0,
               filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.12))",transition:"transform 0.2s"}}
@@ -216,17 +184,14 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px 60px"}}>
+      <div style={{maxWidth:960,margin:"0 auto",padding:"20px 16px 60px"}}>
 
         {/* 검색 패널 */}
         <div style={{background:"white",borderRadius:16,padding:20,marginBottom:16,
           boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
-          <div style={{fontSize:10,fontFamily:"monospace",color:"#3b5bdb",letterSpacing:1.5,
-            textTransform:"uppercase",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
-            <span style={{width:6,height:6,background:"#3b5bdb",borderRadius:"50%",
-              boxShadow:"0 0 6px #3b5bdb",display:"inline-block"}}/>품목 검색
-          </div>
-          <div style={{display:"flex",gap:8,position:"relative"}}>
+
+          {/* 검색바 */}
+          <div style={{display:"flex",gap:8,marginBottom:12}}>
             <div style={{flex:1,position:"relative"}} ref={inRef}>
               <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",
                 fontSize:16,pointerEvents:"none",color:"#94a3b8"}}>🔍</span>
@@ -248,27 +213,26 @@ export default function App() {
                     const added=selected.find(s=>s.id===r.id);
                     const disabled=!!added||selected.length>=4;
                     const shapeR=r.shape==="circle"?"50%":r.shape==="oblong"?"30%":"40%";
-                    const pw=r.shape==="oblong"?36:22;
                     return(
                       <div key={r.id} onClick={()=>!disabled&&pick(r)}
-                        style={{padding:"11px 16px",display:"flex",alignItems:"center",gap:12,
+                        style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:12,
                           borderBottom:"1px solid #f1f5f9",cursor:disabled?"not-allowed":"pointer",
                           opacity:disabled?0.45:1,background:"white",transition:"background 0.12s"}}
                         onMouseEnter={e=>{if(!disabled)e.currentTarget.style.background="#eff6ff";}}
                         onMouseLeave={e=>{e.currentTarget.style.background="white";}}>
-                        <div style={{width:pw,height:22,borderRadius:shapeR,flexShrink:0,
-                          background:"linear-gradient(145deg,#f5f5f5,#e0e0e0)",
-                          border:"1px solid #ccc",boxShadow:"0 2px 4px rgba(0,0,0,0.1)"}}/>
+                        <div style={{width:r.shape==="oblong"?34:22,height:20,borderRadius:shapeR,flexShrink:0,
+                          background:"linear-gradient(145deg,#f5f5f5,#e0e0e0)",border:"1px solid #ccc"}}/>
                         <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
                           <div style={{fontSize:14,fontWeight:600,color:"#1a1f36",
                             whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                             {r.name}{added?" ✓":""}</div>
-                          <div style={{fontSize:11,color:"#94a3b8",fontFamily:"monospace",marginTop:2,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                            {r.etcOtc&&<span style={{background:r.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",
+                          <div style={{fontSize:11,color:"#94a3b8",marginTop:2,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                            {r.etcOtc&&<span style={{
+                              background:r.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",
                               color:r.etcOtc.includes("전문")?"#dc2626":"#16a34a",
                               padding:"1px 5px",borderRadius:3,fontWeight:700,fontSize:10}}>
                               {r.etcOtc.includes("전문")?"전문":"일반"}</span>}
-                            {r.formName&&<span style={{background:"#eff6ff",color:"#3b5bdb",padding:"1px 5px",borderRadius:3}}>{r.formName}</span>}
+                            {r.formName&&<span style={{background:"#eff6ff",color:"#3b5bdb",padding:"1px 5px",borderRadius:3,fontSize:10}}>{r.formName}</span>}
                             {r.colorName&&<span>{r.colorName}</span>}
                             {r.price&&<span style={{color:"#e67700",fontWeight:700}}>💰{Number(r.price).toLocaleString()}원</span>}
                           </div>
@@ -286,77 +250,58 @@ export default function App() {
               style={{padding:"12px 20px",background:"linear-gradient(135deg,#3b5bdb,#7048e8)",
                 border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,
                 fontFamily:"inherit",cursor:selected.length>=4?"not-allowed":"pointer",
-                whiteSpace:"nowrap",opacity:selected.length>=4?0.4:1,
-                boxShadow:"0 2px 10px rgba(59,91,219,0.28)",transition:"all 0.2s"}}>검색</button>
+                opacity:selected.length>=4?0.4:1,whiteSpace:"nowrap",
+                boxShadow:"0 2px 10px rgba(59,91,219,0.28)"}}>검색</button>
+            {/* 리셋 버튼 - 항상 표시 */}
+            <button onClick={resetAll}
+              style={{padding:"12px 18px",background:selected.length>0?"#fee2e2":"#f1f5f9",
+                border:"1.5px solid "+(selected.length>0?"#fecaca":"#e2e8f0"),
+                borderRadius:10,color:selected.length>0?"#dc2626":"#94a3b8",
+                fontSize:14,fontWeight:700,fontFamily:"inherit",cursor:"pointer",
+                whiteSpace:"nowrap",transition:"all 0.2s"}}>
+              🔄 초기화
+            </button>
           </div>
 
-          {/* 선택 태그 + 리셋 */}
-          {selected.length>0&&(
-            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12,alignItems:"center"}}>
-              {selected.map((p,i)=>(
-                <div key={p.id} style={{display:"flex",alignItems:"center",gap:7,
-                  background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:50,
-                  padding:"5px 10px 5px 8px",fontSize:12,fontWeight:600,color:"#1e40af"}}>
-                  <span style={{width:10,height:10,borderRadius:"50%",background:ACCENT[i],flexShrink:0,display:"inline-block"}}/>
-                  {p.name}
-                  <button onClick={()=>remove(p.id)}
-                    style={{background:"none",border:"none",cursor:"pointer",color:"#93c5fd",fontSize:16,lineHeight:1,padding:0,marginLeft:2}}
-                    onMouseEnter={e=>e.target.style.color="#e03131"}
-                    onMouseLeave={e=>e.target.style.color="#93c5fd"}>×</button>
-                </div>
-              ))}
-              <button onClick={resetAll}
-                style={{padding:"6px 16px",background:"#fee2e2",border:"1.5px solid #fecaca",
-                  borderRadius:50,fontSize:12,fontWeight:700,color:"#dc2626",cursor:"pointer",
-                  fontFamily:"inherit",transition:"all 0.2s"}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#fecaca";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#fee2e2";}}>
-                🔄 전체 초기화
-              </button>
-            </div>
-          )}
-          <div style={{fontSize:11,color:"#94a3b8",marginTop:10,fontFamily:"monospace"}}>
-            {selected.length>=4?"최대 4개 선택됨 · 🔄 초기화 후 다시 검색":(selected.length>0?selected.length+"개 선택됨 · ":"")+"최대 4개까지 동시 비교"}
+          {/* 선택된 약품 태그 */}
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",minHeight:32}}>
+            {selected.length===0 ? (
+              <span style={{fontSize:12,color:"#94a3b8",fontFamily:"monospace"}}>
+                약품을 검색하여 추가하세요 (최대 4개)
+              </span>
+            ) : selected.map((p,i)=>(
+              <div key={p.id} style={{display:"flex",alignItems:"center",gap:7,
+                background:"#eff6ff",border:"1.5px solid "+ACCENT[i]+"55",borderRadius:50,
+                padding:"5px 10px 5px 8px",fontSize:12,fontWeight:600,color:ACCENT[i]}}>
+                <span style={{width:10,height:10,borderRadius:"50%",background:ACCENT[i],flexShrink:0,display:"inline-block"}}/>
+                {p.name}
+                <button onClick={()=>remove(p.id)}
+                  style={{background:"none",border:"none",cursor:"pointer",color:ACCENT[i]+"99",fontSize:16,lineHeight:1,padding:0,marginLeft:2}}
+                  onMouseEnter={e=>e.target.style.color="#e03131"}
+                  onMouseLeave={e=>e.target.style.color=ACCENT[i]+"99"}>×</button>
+              </div>
+            ))}
+            {selected.length>0&&<span style={{fontSize:11,color:"#94a3b8",fontFamily:"monospace"}}>{selected.length}/4개 선택됨</span>}
           </div>
 
           {/* PPI 보정 */}
-          <div style={{marginTop:14,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"11px 15px",fontSize:12,color:"#3730a3",lineHeight:1.7}}>
-            📐 <strong>화면 보정:</strong> 기기 PPI 입력 시 더 정확한 실제 크기로 표시됩니다.
-            <div style={{marginTop:7,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              <span>내 기기 PPI:</span>
-              <input type="number" value={ppiInput} onChange={e=>setPpiInput(e.target.value)}
-                placeholder="예: 460" min="72" max="600"
-                style={{width:80,padding:"4px 8px",border:"1px solid #bfdbfe",borderRadius:6,fontSize:12,color:"#1a1f36",background:"white",outline:"none"}}/>
-              <button onClick={applyPPI}
-                style={{padding:"4px 12px",background:"#3b5bdb",border:"none",borderRadius:6,color:"white",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>적용</button>
-              <span style={{fontSize:10,color:"#6366f1"}}>아이폰15: 460 / 갤S24: 416 / 아이패드Air: 264</span>
-            </div>
+          <div style={{marginTop:14,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,
+            padding:"10px 15px",fontSize:12,color:"#3730a3",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            📐 <strong>화면 보정</strong>
+            <span style={{color:"#64748b"}}>기기 PPI:</span>
+            <input type="number" value={ppiInput} onChange={e=>setPpiInput(e.target.value)}
+              placeholder="예: 460" min="72" max="600"
+              style={{width:75,padding:"3px 8px",border:"1px solid #bfdbfe",borderRadius:6,
+                fontSize:12,color:"#1a1f36",background:"white",outline:"none"}}/>
+            <button onClick={applyPPI}
+              style={{padding:"3px 10px",background:"#3b5bdb",border:"none",borderRadius:6,
+                color:"white",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>적용</button>
+            <span style={{fontSize:10,color:"#6366f1"}}>아이폰15:460 / 갤S24:416 / 아이패드Air:264</span>
           </div>
         </div>
 
-        {selected.length > 0 && (<>
-
-          {/* ── 섹션1: 약 사진 (동일 크기) ── */}
-          <div style={{background:"white",borderRadius:16,overflow:"hidden",
-            boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3",marginBottom:16}}>
-            <div style={{padding:"13px 20px",borderBottom:"1px solid #f1f5f9",
-              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{fontSize:10,fontFamily:"monospace",color:"#3b5bdb",letterSpacing:1.5,
-                textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
-                <span style={{width:6,height:6,background:"#3b5bdb",borderRadius:"50%",display:"inline-block"}}/>
-                약품 사진 · 제형 · 약가
-              </div>
-              <div style={{fontSize:11,color:"#64748b",fontFamily:"monospace"}}>동일 크기로 표시</div>
-            </div>
-            <div style={{padding:"28px 20px 24px",display:"flex",flexWrap:"wrap",
-              gap:24,justifyContent:"center",background:"#fafbfc"}}>
-              {selected.map((p,i)=>(
-                <PillPhotoCard key={p.id} pill={p} accentColor={ACCENT[i]} index={i}/>
-              ))}
-            </div>
-          </div>
-
-          {/* ── 섹션2: 실제 크기 형상 비교 ── */}
+        {/* 비교 테이블 */}
+        {selected.length > 0 && (
           <div style={{background:"white",borderRadius:16,overflow:"hidden",
             boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
             <div style={{padding:"13px 20px",borderBottom:"1px solid #f1f5f9",
@@ -364,54 +309,170 @@ export default function App() {
               <div style={{fontSize:10,fontFamily:"monospace",color:"#3b5bdb",letterSpacing:1.5,
                 textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
                 <span style={{width:6,height:6,background:"#3b5bdb",borderRadius:"50%",display:"inline-block"}}/>
-                실제 크기 비교
+                약품 비교표
               </div>
-              <div style={{fontSize:11,fontFamily:"monospace",color:"#0ca678",display:"flex",alignItems:"center",gap:5}}>
-                <span style={{width:7,height:7,background:"#0ca678",borderRadius:"50%",display:"inline-block"}}/>
-                실제 크기 · 실제 형상
-              </div>
-            </div>
-            <div style={{minHeight:300,display:"flex",alignItems:"center",justifyContent:"center",
-              padding:"44px 40px 60px",position:"relative",
-              backgroundImage:"linear-gradient(rgba(148,163,184,0.1) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,0.1) 1px,transparent 1px)",
-              backgroundSize:"24px 24px",backgroundColor:"#fafbfc"}}>
-              <div style={{display:"flex",flexWrap:"wrap",alignItems:"flex-end",justifyContent:"center",gap:60}}>
-                {selected.map((p,i)=>(
-                  <PillSizeCard key={p.id} pill={p} pxPerMm={pxPerMm} accentColor={ACCENT[i]} index={i}/>
-                ))}
-              </div>
-              {/* 1cm 기준자 */}
-              <div style={{position:"absolute",bottom:16,left:"50%",transform:"translateX(-50%)",
-                display:"flex",alignItems:"center",gap:6,fontSize:10,fontFamily:"monospace",color:"#94a3b8",whiteSpace:"nowrap"}}>
-                <span>1cm</span>
-                <div style={{width:oneCm,height:2,position:"relative",background:"linear-gradient(90deg,transparent,#94a3b8,transparent)"}}>
-                  <div style={{position:"absolute",left:-1,top:-3,width:2,height:8,background:"#94a3b8",borderRadius:1}}/>
-                  <div style={{position:"absolute",right:-1,top:-3,width:2,height:8,background:"#94a3b8",borderRadius:1}}/>
-                </div>
-                <span>← 실물 자로 확인</span>
-              </div>
+              <div style={{fontSize:11,color:"#64748b"}}>{selected.length}개 약품 비교 중</div>
             </div>
 
-            {/* 범례 */}
-            <div style={{padding:"11px 20px",borderTop:"1px solid #f1f5f9",background:"#f8fafc",
-              display:"flex",flexWrap:"wrap",gap:"10px 22px"}}>
-              {selected.map((p,i)=>(
-                <div key={p.id} style={{display:"flex",alignItems:"center",gap:7,fontSize:11,fontFamily:"monospace",color:"#64748b"}}>
-                  <span style={{width:10,height:10,borderRadius:"50%",background:ACCENT[i],flexShrink:0,display:"inline-block"}}/>
-                  <span style={{color:ACCENT[i],fontWeight:700}}>{p.name}</span>
-                  <span>·</span>
-                  <span>{p.colorName}</span>
-                  <span>·</span>
-                  <span>{p.width}x{p.height}mm{p.thickness?"x"+p.thickness+"mm":""}</span>
-                  {p.formName&&<><span>·</span><span style={{color:"#3b5bdb"}}>{p.formName}</span></>}
-                  {p.ingredient&&<><span>·</span><span style={{color:"#94a3b8"}}>{p.ingredient}</span></>}
-                  {p.price&&<><span>·</span><span style={{color:"#e67700",fontWeight:700}}>{Number(p.price).toLocaleString()}원</span></>}
-                </div>
-              ))}
+            <div style={{overflowX:"auto"}}>
+              <table className="compare-table">
+                <thead>
+                  <tr>
+                    <th style={{background:"#f8fafc"}}></th>
+                    {selected.map((p,i)=>(
+                      <th key={p.id} style={{textAlign:"center",background:"#f8fafc",
+                        borderLeft:"1px solid #f1f5f9",padding:"12px 14px"}}>
+                        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                          <span style={{width:10,height:10,borderRadius:"50%",
+                            background:ACCENT[i],display:"inline-block"}}/>
+                          <span style={{fontSize:12,fontWeight:700,color:ACCENT[i],lineHeight:1.3}}>
+                            {p.name}
+                          </span>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* 약품 사진 */}
+                  <tr>
+                    <th>약품 사진</th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
+                        <div style={{display:"flex",justifyContent:"center"}}>
+                          <PillPhoto pill={p}/>
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                  {/* 실제 크기 */}
+                  <tr>
+                    <th>실제 크기<br/><span style={{fontSize:9,fontWeight:400,color:"#94a3b8"}}>실물 비례</span></th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
+                        <div style={{display:"flex",justifyContent:"center",
+                          padding:"16px 32px 8px 8px",overflowX:"auto"}}>
+                          <PillShape pill={p} pxPerMm={pxPerMm} accentColor={ACCENT[i]}/>
+                        </div>
+                        {/* 1cm 기준 */}
+                        <div style={{display:"flex",justifyContent:"center",
+                          alignItems:"center",gap:4,fontSize:9,color:"#94a3b8",marginBottom:6}}>
+                          <div style={{width:oneCm,height:1.5,background:"#cbd5e1",position:"relative"}}>
+                            <div style={{position:"absolute",left:0,top:-2,width:1.5,height:6,background:"#cbd5e1"}}/>
+                            <div style={{position:"absolute",right:0,top:-2,width:1.5,height:6,background:"#cbd5e1"}}/>
+                          </div>
+                          <span>1cm</span>
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                  {/* 구분 */}
+                  <tr>
+                    <th>구분</th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
+                        {p.etcOtc ? (
+                          <span style={{
+                            background:p.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",
+                            color:p.etcOtc.includes("전문")?"#dc2626":"#16a34a",
+                            padding:"3px 10px",borderRadius:50,fontWeight:700,fontSize:12}}>
+                            {p.etcOtc.includes("전문")?"전문의약품":"일반의약품"}
+                          </span>
+                        ) : <span style={{color:"#94a3b8",fontSize:12}}>-</span>}
+                      </td>
+                    ))}
+                  </tr>
+                  {/* 제형 */}
+                  <tr>
+                    <th>제형</th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
+                        {p.formName ? (
+                          <span style={{background:"#eff6ff",color:"#3b5bdb",
+                            padding:"3px 10px",borderRadius:50,fontSize:12,fontWeight:600}}>
+                            {p.formName}
+                          </span>
+                        ) : <span style={{color:"#94a3b8",fontSize:12}}>-</span>}
+                      </td>
+                    ))}
+                  </tr>
+                  {/* 색상·모양 */}
+                  <tr>
+                    <th>색상·모양</th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",fontSize:12,color:"#1a1f36"}}>
+                        {p.colorName||"-"} {p.shapeKr?"/"+p.shapeKr:""}
+                      </td>
+                    ))}
+                  </tr>
+                  {/* 크기 */}
+                  <tr>
+                    <th>크기</th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",
+                        fontFamily:"monospace",fontSize:13,fontWeight:700,color:ACCENT[i]}}>
+                        {p.width}×{p.height}mm{p.thickness?"×"+p.thickness:""}
+                      </td>
+                    ))}
+                  </tr>
+                  {/* 각인 */}
+                  <tr>
+                    <th>각인</th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",
+                        fontFamily:"monospace",fontSize:12,color:"#1a1f36"}}>
+                        {p.mark||"-"}
+                      </td>
+                    ))}
+                  </tr>
+                  {/* 주성분 */}
+                  <tr>
+                    <th>주성분</th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",
+                        fontSize:11,color:"#64748b",lineHeight:1.5}}>
+                        {p.ingredient||"-"}
+                      </td>
+                    ))}
+                  </tr>
+                  {/* 약가 */}
+                  <tr>
+                    <th>약가</th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
+                        {p.price ? (
+                          <span style={{color:"#e67700",fontWeight:700,fontSize:13}}>
+                            💰 {Number(p.price).toLocaleString()}원
+                          </span>
+                        ) : <span style={{color:"#94a3b8",fontSize:12}}>-</span>}
+                      </td>
+                    ))}
+                  </tr>
+                  {/* 업체명 */}
+                  <tr>
+                    <th>업체명</th>
+                    {selected.map((p,i)=>(
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",
+                        fontSize:12,color:"#64748b"}}>
+                        {p.company||"-"}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
+        )}
 
-        </>)}
+        {selected.length === 0 && (
+          <div style={{background:"white",borderRadius:16,padding:"60px 20px",
+            boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3",
+            display:"flex",flexDirection:"column",alignItems:"center",gap:12,color:"#94a3b8"}}>
+            <div style={{fontSize:48,opacity:0.25}}>🔬</div>
+            <div style={{fontSize:16,fontWeight:500,color:"#64748b"}}>약품을 검색해서 추가하세요</div>
+            <div style={{fontSize:12,fontFamily:"monospace"}}>1~4개까지 추가하면 테이블로 비교됩니다</div>
+          </div>
+        )}
       </div>
     </div>
   );
