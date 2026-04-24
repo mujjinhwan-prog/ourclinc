@@ -48,14 +48,9 @@ export default async function handler(req, res) {
             .filter(p => /[a-zA-Z]/.test(p) && p.length > 1)
             .join(' / ');
         }
-        const imgUrl = it.ITEM_IMAGE
-          || (it.ITEM_SEQ
-            ? `https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/${it.ITEM_SEQ}`
-            : null);
         return {
           ITEM_SEQ:       it.ITEM_SEQ       || '',
           ITEM_NAME:      it.ITEM_NAME      || '',
-          ENTP_NAME:      it.ENTP_NAME      || '',
           DRUG_SHPE:      it.DRUG_SHPE      || '',
           DRUG_COLO:      it.DRUG_COLO_FRONT || it.DRUG_COLO || '',
           DRUG_COLO_BACK: it.DRUG_COLO_BACK  || '',
@@ -69,10 +64,9 @@ export default async function handler(req, res) {
           CLASS_NAME:     it.CLASS_NAME     || '',
           CLASS_NO:       it.CLASS_NO       || '',
           INGR_NAME_EN:   ingredientEn || it.CLASS_NAME || '',
-          MATERIAL_NAME:  it.MATERIAL_NAME  || '',
-          ITEM_IMAGE:     imgUrl,
           PRICE:          null,
           PRICE_UNIT:     null,
+          HIRA_CLASS:     '',
         };
       });
 
@@ -84,7 +78,7 @@ export default async function handler(req, res) {
             const hiraParams = new URLSearchParams({
               serviceKey: HIRA_KEY,
               pageNo:     '1',
-              numOfRows:  '5',
+              numOfRows:  '10',
               type:       'json',
               itemNm:     it.ITEM_NAME || '',
             });
@@ -92,7 +86,7 @@ export default async function handler(req, res) {
               'https://apis.data.go.kr/B551182/msupRtrvl/getOudrugPrcList?' + hiraParams
             );
             const hiraData = await hiraRes.json();
-            console.log('HIRA raw:', JSON.stringify(hiraData));
+            console.log('HIRA raw:', JSON.stringify(hiraData).substring(0, 500));
 
             let priceItems = [];
             const hBody = hiraData?.response?.body ?? hiraData?.body;
@@ -105,19 +99,20 @@ export default async function handler(req, res) {
               const best = priceItems.find(p =>
                 (p.itemNm || '').includes(it.ITEM_NAME.substring(0, 4))
               ) || priceItems[0];
-              const price = best.mxRbdAmt ?? null;
-              const unit  = best.injcInjcUnitNm || '정';
+
+              const price = best.mxRbdAmt ?? best.uprc ?? null;
+              const unit  = best.injcInjcUnitNm || best.prdtClsNm || '정';
+
               return {
                 ...it,
                 PRICE:      price !== null ? Number(price) : null,
                 PRICE_UNIT: unit,
-                HIRA_CLASS: best.clsNm || it.CLASS_NAME,
-                EDI_CODE:   best.ediCode || it.ITEM_SEQ,
+                HIRA_CLASS: best.clsNm || best.prdtClsNm || it.CLASS_NAME,
               };
             }
             return it;
           } catch (e) {
-            console.error('HIRA price error:', it.ITEM_NAME, e.message);
+            console.error('HIRA error:', it.ITEM_NAME, e.message);
             return it;
           }
         })
@@ -145,8 +140,8 @@ export default async function handler(req, res) {
         system:     'Korean pharmaceutical database. Return ONLY a JSON array. No markdown.',
         messages: [{
           role:    'user',
-          content: `${query} 약품 낱알식별 정보 JSON 배열로 반환.
-[{"ITEM_SEQ":"","ITEM_NAME":"품목명","ENTP_NAME":"업체명","DRUG_SHPE":"원형","DRUG_COLO":"분홍","DRUG_COLO_BACK":"","PRINT_FRONT":"D5","PRINT_BACK":"","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","CLASS_NO":"396","INGR_NAME_EN":"Linagliptin","MATERIAL_NAME":"","ITEM_IMAGE":null,"PRICE":null,"PRICE_UNIT":"정","HIRA_CLASS":"당뇨병용제","EDI_CODE":""}]
+          content: query + ` 약품 낱알식별 정보 JSON 배열로 반환.
+[{"ITEM_SEQ":"","ITEM_NAME":"품목명","DRUG_SHPE":"원형","DRUG_COLO":"분홍","DRUG_COLO_BACK":"","PRINT_FRONT":"D5","PRINT_BACK":"","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","CLASS_NO":"396","INGR_NAME_EN":"Linagliptin","PRICE":null,"PRICE_UNIT":"정","HIRA_CLASS":"당뇨병용제"}]
 없으면 [].`
         }],
       }),
