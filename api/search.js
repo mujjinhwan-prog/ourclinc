@@ -8,255 +8,156 @@ export default async function handler(req, res) {
   const { query } = req.body;
   if (!query) return res.status(400).json({ error: 'query is required' });
 
-  try {
-    // ─── 1단계: 식약처 낱알식별 API ───────────────────────────────────────
-    const mfdsParams = new URLSearchParams({
-      serviceKey: process.env.MFDS_API_KEY,
-      item_name: query,
-      type: 'json',
-      numOfRows: '10',
-      pageNo: '1'
-    });
-    const mfdsRes = await fetch(
-      'https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + mfdsParams
-    );
-    const mfdsData = await mfdsRes.json();
+  const MFDS_KEY = process.env.MFDS_API_KEY;
+  const HIRA_KEY = process.env.HIRA_API_KEY;
+  const AI_KEY   = process.env.ANTHROPIC_API_KEY;
 
-    let items = [];
-    if (mfdsData?.body?.items) {
-      items = Array.isArray(mfdsData.body.items) ? mfdsData.body.items : [mfdsData.body.items];
-    } else if (mfdsData?.response?.body?.items?.item) {
-      const raw = mfdsData.response.body.items.item;
-      items = Array.isArray(raw) ? raw : [raw];
-    }
-
-    let mfdsResult = items
-      .filter(it => it.LNGS_STDR && it.SHRT_STDR)
-      .map(it => {
-        let ingredientEn = '';
-        if (it.MATERIAL_NAME) {
-          const parts = it.MATERIAL_NAME.split('|');
-          const eng = parts
-            .map(p => p.trim())
-            .filter(p => /[a-zA-Z]/.test(p) && p.length > 1);
-          ingredientEn = eng.join(' / ');
-        }
-        return {
-          ...it,
-          INGR_NAME_EN: ingredientEn || it.CLASS_NAME || '',
-          FORM_CODE_NAME: it.FORM_CODE_NAME || '',
-          ETC_OTC_NAME: it.ETC_OTC_NAME || '',
-          ITEM_IMAGE: it.ITEM_IMAGE || (it.ITEM_SEQ
-            ? 'https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/' + it.ITEM_SEQ
-            : null),
-          PRICE: null,
-          PRICE_UNIT: null,
-        };
-      });
-
-    // ─── 2단계: HIRA 급여 약가 조회 ───────────────────────────────────────
-    if (mfdsResult.length > 0) {
-      const hiraResults = await Promise.all(
-        mfdsResult.map(async it => {
-          try {
-            const hiraParams = new URLSearchParams({
-              serviceKey: process.env.HIRA_API_KEY,
-              pageNo: '1',
-              numOfRows: '5',
-              ediCode: it.ITEM_SEQ || '',
-              itemName: it.ITEM_NAME || '',
-              type: 'json'
-            });
-
-            const hiraRes = await fetch(
-              'https://apis.data.go.kr/B551182/msupRtrvl/getDrugPriceInfoList?' + hiraParams
-            );
-            const hiraData = await hiraRes.json();
-
-            let priceItems = [];
-            const body = hiraData?.response?.body ?? hiraData?.body;
-            if (body?.items?.item) {
-              const raw = body.items.item;
-              priceItems = Array.isArray(raw) ? raw : [raw];
-            }
-
-            if (priceItems.length > 0) {
-              const best = priceItems[0];
-              const unitPrice = best.mxRbdAmt ?? best.cpAmt ?? null;
-              const unit = best.unit ?? '정';
-              return { ...it, PRICE: unitPrice ? Number(unitPrice) : null, PRICE_UNIT: unit };
-            }
-            return it;
-          } catch (e) {
-            console.error('HIRA price error for', it.ITEM_NAME, e.message);
-            return it;
-          }
-        })
-      );
-      mfdsResult = hiraResults;
-      return res.status(200).json(mfdsResult);
-    }
-
-    // ─── 3단계: 식약처에 없으면 Claude AI 보완 ────────────────────────────
-    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        system: 'Korean pharmaceutical database API. Return ONLY JSON array. No markdown.',
-        messages: [{
-          role: 'user',
-          content: query + ' 약품 낱알식별 정보 JSON 배열로 반환.\n[{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","INGR_NAME_EN":"Linagliptin","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","PRICE":null,"PRICE_UNIT":"정","ITEM_IMAGE":null}]\n없으면 [].'
-        }]
-      })
-    });
-
-    const aiData = await aiRes.json();
-    if (aiData.error) return res.status(200).json([]);
-
-    const text = (aiData.content || []).map(b => b.text || '').join('');
-    const startIdx = text.indexOf('[');
-    const endIdx = text.lastIndexOf(']');
-    if (startIdx === -1 || endIdx === -1) return res.status(200).json([]);
-
-    const parsed = JSON.parse(text.substring(startIdx, endIdx + 1));
-    return res.status(200).json(
-      parsed.filter(it => it.LNGS_STDR && it.SHRT_STDR)
-    );
-
-  } catch (e) {
-    console.error('Search handler error:', e);
-    return res.status(500).json({ error: e.message });
+  if (!MFDS_KEY) {
+    return res.status(500).json({ error: 'MFDS_API_KEY 환경변수가 설정되지 않았습니다.' });
   }
-}export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { query } = req.body;
-  if (!query) return res.status(400).json({ error: 'query is required' });
 
   try {
-    // ─── 1단계: 식약처 낱알식별 API ───────────────────────────────────────
+    // 1단계: 식약처 낱알식별 API
     const mfdsParams = new URLSearchParams({
-      serviceKey: process.env.MFDS_API_KEY,
-      item_name: query,
-      type: 'json',
-      numOfRows: '10',
-      pageNo: '1'
+      serviceKey: MFDS_KEY,
+      item_name:  query,
+      type:       'json',
+      numOfRows:  '10',
+      pageNo:     '1',
     });
-    const mfdsRes = await fetch(
+
+    const mfdsRes  = await fetch(
       'https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + mfdsParams
     );
     const mfdsData = await mfdsRes.json();
 
-    let items = [];
-    if (mfdsData?.body?.items) {
-      items = Array.isArray(mfdsData.body.items) ? mfdsData.body.items : [mfdsData.body.items];
-    } else if (mfdsData?.response?.body?.items?.item) {
-      const raw = mfdsData.response.body.items.item;
-      items = Array.isArray(raw) ? raw : [raw];
-    }
+    let rawItems = [];
+    const b1 = mfdsData?.body?.items;
+    const b2 = mfdsData?.response?.body?.items?.item;
+    if (b1)      rawItems = Array.isArray(b1) ? b1 : [b1];
+    else if (b2) rawItems = Array.isArray(b2) ? b2 : [b2];
 
-    let mfdsResult = items
+    let mfdsResult = rawItems
       .filter(it => it.LNGS_STDR && it.SHRT_STDR)
       .map(it => {
         let ingredientEn = '';
         if (it.MATERIAL_NAME) {
-          const parts = it.MATERIAL_NAME.split('|');
-          const eng = parts
+          ingredientEn = it.MATERIAL_NAME
+            .split('|')
             .map(p => p.trim())
-            .filter(p => /[a-zA-Z]/.test(p) && p.length > 1);
-          ingredientEn = eng.join(' / ');
+            .filter(p => /[a-zA-Z]/.test(p) && p.length > 1)
+            .join(' / ');
         }
+        const imgUrl = it.ITEM_IMAGE
+          || (it.ITEM_SEQ
+            ? `https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/${it.ITEM_SEQ}`
+            : null);
         return {
-          ...it,
-          INGR_NAME_EN: ingredientEn || it.CLASS_NAME || '',
+          ITEM_SEQ:       it.ITEM_SEQ       || '',
+          ITEM_NAME:      it.ITEM_NAME      || '',
+          ENTP_NAME:      it.ENTP_NAME      || '',
+          DRUG_SHPE:      it.DRUG_SHPE      || '',
+          DRUG_COLO:      it.DRUG_COLO_FRONT || it.DRUG_COLO || '',
+          DRUG_COLO_BACK: it.DRUG_COLO_BACK  || '',
+          PRINT_FRONT:    it.PRINT_FRONT    || '',
+          PRINT_BACK:     it.PRINT_BACK     || '',
           FORM_CODE_NAME: it.FORM_CODE_NAME || '',
-          ETC_OTC_NAME: it.ETC_OTC_NAME || '',
-          ITEM_IMAGE: it.ITEM_IMAGE || (it.ITEM_SEQ
-            ? 'https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/' + it.ITEM_SEQ
-            : null),
-          PRICE: null,
-          PRICE_UNIT: null,
+          ETC_OTC_NAME:   it.ETC_OTC_NAME   || '',
+          LNGS_STDR:      parseFloat(it.LNGS_STDR) || 0,
+          SHRT_STDR:      parseFloat(it.SHRT_STDR) || 0,
+          THICK:          parseFloat(it.THICK)      || 0,
+          CLASS_NAME:     it.CLASS_NAME     || '',
+          CLASS_NO:       it.CLASS_NO       || '',
+          INGR_NAME_EN:   ingredientEn || it.CLASS_NAME || '',
+          MATERIAL_NAME:  it.MATERIAL_NAME  || '',
+          ITEM_IMAGE:     imgUrl,
+          PRICE:          null,
+          PRICE_UNIT:     null,
         };
       });
 
-    // ─── 2단계: HIRA 급여 약가 조회 ───────────────────────────────────────
-    if (mfdsResult.length > 0) {
+    // 2단계: HIRA 급여 약가 조회
+    if (mfdsResult.length > 0 && HIRA_KEY) {
       const hiraResults = await Promise.all(
         mfdsResult.map(async it => {
           try {
             const hiraParams = new URLSearchParams({
-              serviceKey: process.env.HIRA_API_KEY,
-              pageNo: '1',
-              numOfRows: '5',
-              ediCode: it.ITEM_SEQ || '',
-              itemName: it.ITEM_NAME || '',
-              type: 'json'
+              serviceKey: HIRA_KEY,
+              pageNo:     '1',
+              numOfRows:  '5',
+              type:       'json',
+              itemNm:     it.ITEM_NAME || '',
             });
-
-            const hiraRes = await fetch(
-              'https://apis.data.go.kr/B551182/msupRtrvl/getDrugPriceInfoList?' + hiraParams
+            const hiraRes  = await fetch(
+              'https://apis.data.go.kr/B551182/msupRtrvl/getOudrugPrcList?' + hiraParams
             );
             const hiraData = await hiraRes.json();
+            console.log('HIRA raw:', JSON.stringify(hiraData));
 
             let priceItems = [];
-            const body = hiraData?.response?.body ?? hiraData?.body;
-            if (body?.items?.item) {
-              const raw = body.items.item;
+            const hBody = hiraData?.response?.body ?? hiraData?.body;
+            if (hBody?.items?.item) {
+              const raw = hBody.items.item;
               priceItems = Array.isArray(raw) ? raw : [raw];
             }
 
             if (priceItems.length > 0) {
-              const best = priceItems[0];
-              const unitPrice = best.mxRbdAmt ?? best.cpAmt ?? null;
-              const unit = best.unit ?? '정';
-              return { ...it, PRICE: unitPrice ? Number(unitPrice) : null, PRICE_UNIT: unit };
+              const best = priceItems.find(p =>
+                (p.itemNm || '').includes(it.ITEM_NAME.substring(0, 4))
+              ) || priceItems[0];
+              const price = best.mxRbdAmt ?? null;
+              const unit  = best.injcInjcUnitNm || '정';
+              return {
+                ...it,
+                PRICE:      price !== null ? Number(price) : null,
+                PRICE_UNIT: unit,
+                HIRA_CLASS: best.clsNm || it.CLASS_NAME,
+                EDI_CODE:   best.ediCode || it.ITEM_SEQ,
+              };
             }
             return it;
           } catch (e) {
-            console.error('HIRA price error for', it.ITEM_NAME, e.message);
+            console.error('HIRA price error:', it.ITEM_NAME, e.message);
             return it;
           }
         })
       );
       mfdsResult = hiraResults;
+    }
+
+    if (mfdsResult.length > 0) {
       return res.status(200).json(mfdsResult);
     }
 
-    // ─── 3단계: 식약처에 없으면 Claude AI 보완 ────────────────────────────
+    // 3단계: 식약처에 없으면 Claude AI 보완
+    if (!AI_KEY) return res.status(200).json([]);
+
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'Content-Type':      'application/json',
+        'x-api-key':         AI_KEY,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model:      'claude-haiku-4-5-20251001',
         max_tokens: 2000,
-        system: 'Korean pharmaceutical database API. Return ONLY JSON array. No markdown.',
+        system:     'Korean pharmaceutical database. Return ONLY a JSON array. No markdown.',
         messages: [{
-          role: 'user',
-          content: query + ' 약품 낱알식별 정보 JSON 배열로 반환.\n[{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","INGR_NAME_EN":"Linagliptin","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","PRICE":null,"PRICE_UNIT":"정","ITEM_IMAGE":null}]\n없으면 [].'
-        }]
-      })
+          role:    'user',
+          content: `${query} 약품 낱알식별 정보 JSON 배열로 반환.
+[{"ITEM_SEQ":"","ITEM_NAME":"품목명","ENTP_NAME":"업체명","DRUG_SHPE":"원형","DRUG_COLO":"분홍","DRUG_COLO_BACK":"","PRINT_FRONT":"D5","PRINT_BACK":"","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","CLASS_NO":"396","INGR_NAME_EN":"Linagliptin","MATERIAL_NAME":"","ITEM_IMAGE":null,"PRICE":null,"PRICE_UNIT":"정","HIRA_CLASS":"당뇨병용제","EDI_CODE":""}]
+없으면 [].`
+        }],
+      }),
     });
 
     const aiData = await aiRes.json();
     if (aiData.error) return res.status(200).json([]);
 
-    const text = (aiData.content || []).map(b => b.text || '').join('');
+    const text     = (aiData.content || []).map(b => b.text || '').join('');
     const startIdx = text.indexOf('[');
-    const endIdx = text.lastIndexOf(']');
+    const endIdx   = text.lastIndexOf(']');
     if (startIdx === -1 || endIdx === -1) return res.status(200).json([]);
 
     const parsed = JSON.parse(text.substring(startIdx, endIdx + 1));
@@ -265,7 +166,7 @@ export default async function handler(req, res) {
     );
 
   } catch (e) {
-    console.error('Search handler error:', e);
+    console.error('Search handler fatal error:', e);
     return res.status(500).json({ error: e.message });
   }
 }
