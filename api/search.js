@@ -30,12 +30,15 @@ export default async function handler(req, res) {
       'https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + mfdsParams
     );
     const mfdsData = await mfdsRes.json();
+    console.log('MFDS raw:', JSON.stringify(mfdsData).substring(0, 300));
 
     let rawItems = [];
     const b1 = mfdsData?.body?.items;
     const b2 = mfdsData?.response?.body?.items?.item;
     if (b1)      rawItems = Array.isArray(b1) ? b1 : [b1];
     else if (b2) rawItems = Array.isArray(b2) ? b2 : [b2];
+
+    console.log('MFDS items count:', rawItems.length);
 
     let mfdsResult = rawItems
       .filter(it => it.LNGS_STDR && it.SHRT_STDR)
@@ -70,23 +73,31 @@ export default async function handler(req, res) {
         };
       });
 
+    console.log('MFDS filtered count:', mfdsResult.length);
+
     // 2단계: HIRA 급여 약가 조회
     if (mfdsResult.length > 0 && HIRA_KEY) {
+      console.log('HIRA 조회 시작, 약품 수:', mfdsResult.length);
       const hiraResults = await Promise.all(
         mfdsResult.map(async it => {
           try {
-            const hiraParams = new URLSearchParams({
-              serviceKey: HIRA_KEY,
-              pageNo:     '1',
-              numOfRows:  '10',
-              type:       'json',
-              itemNm:     it.ITEM_NAME || '',
-            });
-            const hiraRes  = await fetch(
-              'https://apis.data.go.kr/B551182/msupRtrvl/getOudrugPrcList?' + hiraParams
-            );
-            const hiraData = await hiraRes.json();
-            console.log('HIRA raw:', JSON.stringify(hiraData).substring(0, 500));
+            // HIRA 약가기준정보조회서비스 - 외래약가목록조회
+            const hiraUrl = 'https://apis.data.go.kr/B551182/msupRtrvl/getOudrugPrcList'
+              + '?serviceKey=' + encodeURIComponent(HIRA_KEY)
+              + '&pageNo=1&numOfRows=10&type=json'
+              + '&itemNm=' + encodeURIComponent(it.ITEM_NAME || '');
+
+            console.log('HIRA URL:', hiraUrl.substring(0, 150));
+
+            const hiraRes  = await fetch(hiraUrl);
+            const hiraText = await hiraRes.text();
+            console.log('HIRA response:', hiraText.substring(0, 400));
+
+            let hiraData;
+            try { hiraData = JSON.parse(hiraText); } catch(e) {
+              console.error('HIRA JSON parse error:', hiraText.substring(0, 200));
+              return it;
+            }
 
             let priceItems = [];
             const hBody = hiraData?.response?.body ?? hiraData?.body;
@@ -95,19 +106,24 @@ export default async function handler(req, res) {
               priceItems = Array.isArray(raw) ? raw : [raw];
             }
 
+            console.log('HIRA priceItems count:', priceItems.length);
+
             if (priceItems.length > 0) {
               const best = priceItems.find(p =>
                 (p.itemNm || '').includes(it.ITEM_NAME.substring(0, 4))
               ) || priceItems[0];
 
-              const price = best.mxRbdAmt ?? best.uprc ?? null;
-              const unit  = best.injcInjcUnitNm || best.prdtClsNm || '정';
+              console.log('HIRA best item keys:', Object.keys(best).join(', '));
+              console.log('HIRA best item:', JSON.stringify(best).substring(0, 300));
+
+              const price = best.mxRbdAmt ?? best.uprc ?? best.shtRfndAmt ?? null;
+              const unit  = best.injcInjcUnitNm || '정';
 
               return {
                 ...it,
                 PRICE:      price !== null ? Number(price) : null,
                 PRICE_UNIT: unit,
-                HIRA_CLASS: best.clsNm || best.prdtClsNm || it.CLASS_NAME,
+                HIRA_CLASS: best.clsNm || it.CLASS_NAME,
               };
             }
             return it;
@@ -118,6 +134,8 @@ export default async function handler(req, res) {
         })
       );
       mfdsResult = hiraResults;
+    } else {
+      console.log('HIRA 조회 스킵 - mfdsResult:', mfdsResult.length, 'HIRA_KEY:', !!HIRA_KEY);
     }
 
     if (mfdsResult.length > 0) {
@@ -125,6 +143,7 @@ export default async function handler(req, res) {
     }
 
     // 3단계: 식약처에 없으면 Claude AI 보완
+    console.log('3단계: Claude AI 보완 시작');
     if (!AI_KEY) return res.status(200).json([]);
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
