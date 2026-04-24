@@ -435,16 +435,16 @@ export default function App() {
                       </td>
                     ))}
                   </tr>
-                  {/* 약가 */}
+                 {/* 약가 */}
                   <tr>
                     <th>약가</th>
                     {selected.map((p,i)=>(
-                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
+                      <td key={p.id}>
                         {p.price ? (
                           <span style={{color:"#e67700",fontWeight:700,fontSize:13}}>
                             💰 {Number(p.price).toLocaleString()}원
                           </span>
-                        ) : <span style={{color:"#94a3b8",fontSize:12}}>-</span>}
+                        ):<span style={{color:"#94a3b8",fontSize:12}}>조회 중...</span>}
                       </td>
                     ))}
                   </tr>
