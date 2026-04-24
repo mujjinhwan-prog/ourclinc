@@ -22,17 +22,18 @@ async function fetchDrug(query) {
   if (raw.error) throw new Error(raw.error);
   return raw.filter(it=>it.LNGS_STDR&&it.SHRT_STDR).map((it,i)=>({
     id:(it.ITEM_NAME||"p")+"_"+i,
-    name:it.ITEM_NAME||"", company:it.ENTP_NAME||"",
+    name:it.ITEM_NAME||"",
     width:parseFloat(it.LNGS_STDR)||0, height:parseFloat(it.SHRT_STDR)||0,
     thickness:it.THICK?parseFloat(it.THICK):null,
     shape:parseShape(it.DRUG_SHPE), shapeKr:it.DRUG_SHPE||"",
     colorName:it.DRUG_COLO||"",
     mark:(it.PRINT_FRONT||"")+(it.PRINT_BACK?" / "+it.PRINT_BACK:""),
-    ingredient:it.INGR_NAME_EN||it.MATERIAL_NAME||it.CLASS_NAME||"",
-    price:it.MAX_PRICE||it.UNIT_PRICE||null,
+    ingredient:it.INGR_NAME_EN||it.CLASS_NAME||"",
+    price:it.PRICE||null,
+    priceUnit:it.PRICE_UNIT||"정",
+    hiraClass:it.HIRA_CLASS||it.CLASS_NAME||"",
     formName:it.FORM_CODE_NAME||"",
     etcOtc:it.ETC_OTC_NAME||"",
-    imgUrl:it.ITEM_IMAGE||(it.ITEM_SEQ?"https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/"+it.ITEM_SEQ:null),
   }));
 }
 
@@ -81,22 +82,6 @@ function PillShape({ pill, pxPerMm, accentColor }) {
   );
 }
 
-function PillPhoto({ pill }) {
-  const [err, setErr] = useState(false);
-  return (
-    <div style={{width:100,height:70,borderRadius:10,overflow:"hidden",
-      border:"1.5px solid #e2e8f0",background:"#f8f8f8",
-      display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-      {pill.imgUrl && !err ? (
-        <img src={pill.imgUrl} alt={pill.name} onError={()=>setErr(true)}
-          style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-      ) : (
-        <span style={{fontSize:28,opacity:0.4}}>💊</span>
-      )}
-    </div>
-  );
-}
-
 export default function App() {
   const [query,setQuery]=useState(""); const [results,setResults]=useState([]);
   const [loading,setLoading]=useState(false); const [error,setError]=useState("");
@@ -136,20 +121,6 @@ export default function App() {
     const ppm=v/25.4;setPxPerMm(ppm);setDpiInfo(v+" PPI (수동) · "+ppm.toFixed(2)+"px/mm");};
   const oneCm=pxPerMm*10;
 
-  // 테이블 행 정의
-  const ROWS = [
-    { key:"photo",    label:"약품 사진" },
-    { key:"size",     label:"실제 크기" },
-    { key:"name",     label:"품목명" },
-    { key:"etcOtc",   label:"구분" },
-    { key:"formName", label:"제형" },
-    { key:"colorName",label:"색상" },
-    { key:"mark",     label:"각인" },
-    { key:"ingredient",label:"주성분" },
-    { key:"price",    label:"약가" },
-    { key:"company",  label:"업체명" },
-  ];
-
   return (
     <div style={{fontFamily:"'Noto Sans KR',sans-serif",background:"#f0f4f8",minHeight:"100vh",color:"#1a1f36"}}>
       <style>{`
@@ -169,7 +140,7 @@ export default function App() {
       <div style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 20px",
         position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
         <div style={{maxWidth:960,margin:"0 auto",height:66,display:"flex",alignItems:"center",gap:14}}>
-          <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="Voice of YUHAN"
+          <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo"
             style={{height:54,width:"auto",objectFit:"contain",flexShrink:0,
               filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.12))",transition:"transform 0.2s"}}
             onMouseEnter={e=>e.target.style.transform="scale(1.05)"}
@@ -190,7 +161,6 @@ export default function App() {
         <div style={{background:"white",borderRadius:16,padding:20,marginBottom:16,
           boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
 
-          {/* 검색바 */}
           <div style={{display:"flex",gap:8,marginBottom:12}}>
             <div style={{flex:1,position:"relative"}} ref={inRef}>
               <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",
@@ -234,7 +204,7 @@ export default function App() {
                               {r.etcOtc.includes("전문")?"전문":"일반"}</span>}
                             {r.formName&&<span style={{background:"#eff6ff",color:"#3b5bdb",padding:"1px 5px",borderRadius:3,fontSize:10}}>{r.formName}</span>}
                             {r.colorName&&<span>{r.colorName}</span>}
-                            {r.price&&<span style={{color:"#e67700",fontWeight:700}}>💰{Number(r.price).toLocaleString()}원</span>}
+                            {r.price&&<span style={{color:"#e67700",fontWeight:700}}>💰{Number(r.price).toLocaleString()}원/{r.priceUnit}</span>}
                           </div>
                         </div>
                         <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,
@@ -252,7 +222,6 @@ export default function App() {
                 fontFamily:"inherit",cursor:selected.length>=4?"not-allowed":"pointer",
                 opacity:selected.length>=4?0.4:1,whiteSpace:"nowrap",
                 boxShadow:"0 2px 10px rgba(59,91,219,0.28)"}}>검색</button>
-            {/* 리셋 버튼 - 항상 표시 */}
             <button onClick={resetAll}
               style={{padding:"12px 18px",background:selected.length>0?"#fee2e2":"#f1f5f9",
                 border:"1.5px solid "+(selected.length>0?"#fecaca":"#e2e8f0"),
@@ -263,12 +232,9 @@ export default function App() {
             </button>
           </div>
 
-          {/* 선택된 약품 태그 */}
           <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",minHeight:32}}>
             {selected.length===0 ? (
-              <span style={{fontSize:12,color:"#94a3b8",fontFamily:"monospace"}}>
-                약품을 검색하여 추가하세요 (최대 4개)
-              </span>
+              <span style={{fontSize:12,color:"#94a3b8",fontFamily:"monospace"}}>약품을 검색하여 추가하세요 (최대 4개)</span>
             ) : selected.map((p,i)=>(
               <div key={p.id} style={{display:"flex",alignItems:"center",gap:7,
                 background:"#eff6ff",border:"1.5px solid "+ACCENT[i]+"55",borderRadius:50,
@@ -284,7 +250,6 @@ export default function App() {
             {selected.length>0&&<span style={{fontSize:11,color:"#94a3b8",fontFamily:"monospace"}}>{selected.length}/4개 선택됨</span>}
           </div>
 
-          {/* PPI 보정 */}
           <div style={{marginTop:14,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,
             padding:"10px 15px",fontSize:12,color:"#3730a3",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             📐 <strong>화면 보정</strong>
@@ -313,50 +278,31 @@ export default function App() {
               </div>
               <div style={{fontSize:11,color:"#64748b"}}>{selected.length}개 약품 비교 중</div>
             </div>
-
             <div style={{overflowX:"auto"}}>
               <table className="compare-table">
                 <thead>
                   <tr>
                     <th style={{background:"#f8fafc"}}></th>
                     {selected.map((p,i)=>(
-                      <th key={p.id} style={{textAlign:"center",background:"#f8fafc",
-                        borderLeft:"1px solid #f1f5f9",padding:"12px 14px"}}>
+                      <th key={p.id} style={{textAlign:"center",background:"#f8fafc",borderLeft:"1px solid #f1f5f9",padding:"12px 14px"}}>
                         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                          <span style={{width:10,height:10,borderRadius:"50%",
-                            background:ACCENT[i],display:"inline-block"}}/>
-                          <span style={{fontSize:12,fontWeight:700,color:ACCENT[i],lineHeight:1.3}}>
-                            {p.name}
-                          </span>
+                          <span style={{width:10,height:10,borderRadius:"50%",background:ACCENT[i],display:"inline-block"}}/>
+                          <span style={{fontSize:12,fontWeight:700,color:ACCENT[i],lineHeight:1.3}}>{p.name}</span>
                         </div>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {/* 약품 사진 */}
-                  <tr>
-                    <th>약품 사진</th>
-                    {selected.map((p,i)=>(
-                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
-                        <div style={{display:"flex",justifyContent:"center"}}>
-                          <PillPhoto pill={p}/>
-                        </div>
-                      </td>
-                    ))}
-                  </tr>
                   {/* 실제 크기 */}
                   <tr>
                     <th>실제 크기<br/><span style={{fontSize:9,fontWeight:400,color:"#94a3b8"}}>실물 비례</span></th>
                     {selected.map((p,i)=>(
                       <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
-                        <div style={{display:"flex",justifyContent:"center",
-                          padding:"16px 32px 8px 8px",overflowX:"auto"}}>
+                        <div style={{display:"flex",justifyContent:"center",padding:"16px 32px 8px 8px",overflowX:"auto"}}>
                           <PillShape pill={p} pxPerMm={pxPerMm} accentColor={ACCENT[i]}/>
                         </div>
-                        {/* 1cm 기준 */}
-                        <div style={{display:"flex",justifyContent:"center",
-                          alignItems:"center",gap:4,fontSize:9,color:"#94a3b8",marginBottom:6}}>
+                        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:4,fontSize:9,color:"#94a3b8",marginBottom:6}}>
                           <div style={{width:oneCm,height:1.5,background:"#cbd5e1",position:"relative"}}>
                             <div style={{position:"absolute",left:0,top:-2,width:1.5,height:6,background:"#cbd5e1"}}/>
                             <div style={{position:"absolute",right:0,top:-2,width:1.5,height:6,background:"#cbd5e1"}}/>
@@ -372,8 +318,7 @@ export default function App() {
                     {selected.map((p,i)=>(
                       <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
                         {p.etcOtc ? (
-                          <span style={{
-                            background:p.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",
+                          <span style={{background:p.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",
                             color:p.etcOtc.includes("전문")?"#dc2626":"#16a34a",
                             padding:"3px 10px",borderRadius:50,fontWeight:700,fontSize:12}}>
                             {p.etcOtc.includes("전문")?"전문의약품":"일반의약품"}
@@ -388,8 +333,7 @@ export default function App() {
                     {selected.map((p,i)=>(
                       <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
                         {p.formName ? (
-                          <span style={{background:"#eff6ff",color:"#3b5bdb",
-                            padding:"3px 10px",borderRadius:50,fontSize:12,fontWeight:600}}>
+                          <span style={{background:"#eff6ff",color:"#3b5bdb",padding:"3px 10px",borderRadius:50,fontSize:12,fontWeight:600}}>
                             {p.formName}
                           </span>
                         ) : <span style={{color:"#94a3b8",fontSize:12}}>-</span>}
@@ -401,7 +345,7 @@ export default function App() {
                     <th>색상·모양</th>
                     {selected.map((p,i)=>(
                       <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",fontSize:12,color:"#1a1f36"}}>
-                        {p.colorName||"-"} {p.shapeKr?"/"+p.shapeKr:""}
+                        {p.colorName||"-"}{p.shapeKr?" / "+p.shapeKr:""}
                       </td>
                     ))}
                   </tr>
@@ -409,8 +353,7 @@ export default function App() {
                   <tr>
                     <th>크기</th>
                     {selected.map((p,i)=>(
-                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",
-                        fontFamily:"monospace",fontSize:13,fontWeight:700,color:ACCENT[i]}}>
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",fontFamily:"monospace",fontSize:13,fontWeight:700,color:ACCENT[i]}}>
                         {p.width}×{p.height}mm{p.thickness?"×"+p.thickness:""}
                       </td>
                     ))}
@@ -419,8 +362,7 @@ export default function App() {
                   <tr>
                     <th>각인</th>
                     {selected.map((p,i)=>(
-                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",
-                        fontFamily:"monospace",fontSize:12,color:"#1a1f36"}}>
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",fontFamily:"monospace",fontSize:12,color:"#1a1f36"}}>
                         {p.mark||"-"}
                       </td>
                     ))}
@@ -429,32 +371,30 @@ export default function App() {
                   <tr>
                     <th>주성분</th>
                     {selected.map((p,i)=>(
-                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",
-                        fontSize:11,color:"#64748b",lineHeight:1.5}}>
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",fontSize:11,color:"#64748b",lineHeight:1.5}}>
                         {p.ingredient||"-"}
                       </td>
                     ))}
                   </tr>
-                 {/* 약가 */}
+                  {/* 효능군 */}
                   <tr>
-                    <th>약가</th>
+                    <th>효능군</th>
                     {selected.map((p,i)=>(
-                      <td key={p.id}>
-                        {p.price ? (
-                          <span style={{color:"#e67700",fontWeight:700,fontSize:13}}>
-                            💰 {Number(p.price).toLocaleString()}원
-                          </span>
-                        ):<span style={{color:"#94a3b8",fontSize:12}}>조회 중...</span>}
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",fontSize:12,color:"#64748b"}}>
+                        {p.hiraClass||"-"}
                       </td>
                     ))}
                   </tr>
-                  {/* 업체명 */}
+                  {/* 약가 */}
                   <tr>
-                    <th>업체명</th>
+                    <th>약가</th>
                     {selected.map((p,i)=>(
-                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",
-                        fontSize:12,color:"#64748b"}}>
-                        {p.company||"-"}
+                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
+                        {p.price ? (
+                          <span style={{color:"#e67700",fontWeight:700,fontSize:13}}>
+                            {Number(p.price).toLocaleString()}원/{p.priceUnit}
+                          </span>
+                        ) : <span style={{color:"#94a3b8",fontSize:12}}>-</span>}
                       </td>
                     ))}
                   </tr>
