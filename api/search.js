@@ -6,7 +6,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { query } = req.body;
   if (!query) return res.status(400).json({ error: 'query is required' });
+
   try {
+    // 1단계: 식약처 낱알식별 API
     var params = new URLSearchParams({
       serviceKey: process.env.MFDS_API_KEY,
       item_name: query,
@@ -23,6 +25,7 @@ export default async function handler(req, res) {
       var raw = mfdsData.response.body.items.item;
       items = Array.isArray(raw) ? raw : [raw];
     }
+
     var mfdsResult = items.filter(function(it) { return it.LNGS_STDR && it.SHRT_STDR; }).map(function(it) {
       var ingredientEn = '';
       if (it.MATERIAL_NAME) {
@@ -31,16 +34,68 @@ export default async function handler(req, res) {
         ingredientEn = eng.join(' / ');
       }
       it.INGR_NAME_EN = ingredientEn || it.CLASS_NAME || '';
-      it.MAX_PRICE = it.MAX_PRICE || it.UNIT_PRICE || null;
       it.FORM_CODE_NAME = it.FORM_CODE_NAME || '';
       it.ETC_OTC_NAME = it.ETC_OTC_NAME || '';
-      it.CHART = it.CHART || '';
       if (!it.ITEM_IMAGE && it.ITEM_SEQ) {
         it.ITEM_IMAGE = 'https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/' + it.ITEM_SEQ;
       }
+      it.PRICE = null; // 약가는 별도 조회
       return it;
     });
-    if (mfdsResult.length > 0) return res.status(200).json(mfdsResult);
+
+    // 2단계: 약가 웹서칭 (Claude 웹검색)
+    if (mfdsResult.length > 0) {
+      try {
+        var itemNames = mfdsResult.map(function(it) { return it.ITEM_NAME; }).join(', ');
+        var priceRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1000,
+            tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+            system: '약가 정보를 웹에서 검색하여 JSON 객체만 반환하세요. 설명 없이 순수 JSON만.',
+            messages: [{
+              role: 'user',
+              content: '다음 약품들의 급여 약가(원/정 또는 원/캡슐)를 드럭인포(druginfo.co.kr) 또는 약학정보원(health.kr)에서 검색해서 JSON 객체로 반환하세요.
+약품목록: ' + itemNames + '
+형식: {"약품명":숫자(원단위), "약품명2":숫자} 
+약가를 찾을 수 없으면 null. 순수 JSON만 반환.'
+            }]
+          })
+        });
+
+        var priceData = await priceRes.json();
+        var priceText = (priceData.content || []).map(function(b) { return b.text || ''; }).join('');
+        var priceStart = priceText.indexOf('{');
+        var priceEnd = priceText.lastIndexOf('}');
+        if (priceStart !== -1 && priceEnd !== -1) {
+          var priceJson = JSON.parse(priceText.substring(priceStart, priceEnd + 1));
+          mfdsResult = mfdsResult.map(function(it) {
+            // 약품명으로 약가 매칭
+            var itemName = it.ITEM_NAME || '';
+            for (var key in priceJson) {
+              if (itemName.includes(key) || key.includes(itemName.substring(0, 4))) {
+                it.PRICE = priceJson[key];
+                break;
+              }
+            }
+            return it;
+          });
+        }
+      } catch(priceErr) {
+        // 약가 조회 실패해도 나머지 데이터는 반환
+        console.error('Price search error:', priceErr.message);
+      }
+
+      return res.status(200).json(mfdsResult);
+    }
+
+    // 3단계: 식약처에 없으면 Claude AI 보완
     var aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -52,7 +107,7 @@ export default async function handler(req, res) {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 2000,
         system: 'Korean pharmaceutical database API. Return ONLY JSON array. No markdown.',
-        messages: [{ role: 'user', content: query + ' 약품 낱알식별 정보 JSON 배열로 반환. [{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","INGR_NAME_EN":"Linagliptin","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","MAX_PRICE":150,"ITEM_IMAGE":null}] 없으면[].' }]
+        messages: [{ role: 'user', content: query + ' 약품 낱알식별 정보 JSON 배열로 반환. [{"ITEM_NAME":"품목명","ENTP_NAME":"업체명","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"DRUG_SHPE":"원형","DRUG_COLO":"분홍","PRINT_FRONT":"D5","PRINT_BACK":"","CLASS_NAME":"당뇨병용제","INGR_NAME_EN":"Linagliptin","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","PRICE":null,"ITEM_IMAGE":null}] 없으면[].' }]
       })
     });
     var aiData = await aiRes.json();
@@ -64,6 +119,7 @@ export default async function handler(req, res) {
     var jsonStr = text.substring(startIdx, endIdx + 1);
     var parsed = JSON.parse(jsonStr);
     return res.status(200).json(parsed.filter(function(it) { return it.LNGS_STDR && it.SHRT_STDR; }));
+
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
