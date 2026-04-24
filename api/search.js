@@ -64,7 +64,7 @@ export default async function handler(req, res) {
     if (aiData.error) return res.status(200).json([]);
 
     const text = (aiData.content || []).map(b => b.text || '').join('');
-    const match = text.match(/[[sS]*]/);
+    const match = text.match(/\[[\s\S]*\]/);
     if (!match) return res.status(200).json([]);
 
     const parsed = JSON.parse(match[0]);
