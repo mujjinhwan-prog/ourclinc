@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'MFDS_API_KEY 환경변수가 설정되지 않았습니다.' });
   }
 
-  // 식약처 API 호출 헬퍼 - item_name은 앞에서부터 일치하는 것 반환
+  // 식약처 API 호출
   async function callMfds(searchWord, rows = 20) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY,
@@ -36,7 +36,8 @@ export default async function handler(req, res) {
     return [];
   }
 
-  // 결과 정규화
+  // 실제 API 응답 필드명에 맞게 정규화
+  // LENG_LONG=장축, LENG_SHORT=단축, DRUG_SHAPE=모양, COLOR_CLASS1=색상
   function normalize(it) {
     let ingredientEn = '';
     if (it.MATERIAL_NAME) {
@@ -46,19 +47,27 @@ export default async function handler(req, res) {
         .filter(p => /[a-zA-Z]/.test(p) && p.length > 1)
         .join(' / ');
     }
+
+    const long  = parseFloat(it.LENG_LONG  || it.LNGS_STDR) || 0;
+    const short = parseFloat(it.LENG_SHORT || it.SHRT_STDR) || 0;
+    const thick = parseFloat(it.THICK) || 0;
+    const shape = it.DRUG_SHAPE || it.DRUG_SHPE || '';
+    const color = it.COLOR_CLASS1 || it.DRUG_COLO_FRONT || it.DRUG_COLO || '';
+    const colorBack = it.COLOR_CLASS2 || it.DRUG_COLO_BACK || '';
+
     return {
-      ITEM_SEQ:       it.ITEM_SEQ        || '',
-      ITEM_NAME:      it.ITEM_NAME       || '',
-      DRUG_SHPE:      it.DRUG_SHPE       || '',
-      DRUG_COLO:      it.DRUG_COLO_FRONT || it.DRUG_COLO || '',
-      DRUG_COLO_BACK: it.DRUG_COLO_BACK  || '',
-      PRINT_FRONT:    it.PRINT_FRONT     || '',
-      PRINT_BACK:     it.PRINT_BACK      || '',
+      ITEM_SEQ:       it.ITEM_SEQ       || '',
+      ITEM_NAME:      it.ITEM_NAME      || '',
+      DRUG_SHPE:      shape,
+      DRUG_COLO:      color,
+      DRUG_COLO_BACK: colorBack,
+      PRINT_FRONT:    it.MARK_CODE_FRONT || it.PRINT_FRONT || '',
+      PRINT_BACK:     it.MARK_CODE_BACK  || it.PRINT_BACK  || '',
       FORM_CODE_NAME: it.FORM_CODE_NAME  || '',
       ETC_OTC_NAME:   it.ETC_OTC_NAME    || '',
-      LNGS_STDR:      parseFloat(it.LNGS_STDR) || 0,
-      SHRT_STDR:      parseFloat(it.SHRT_STDR) || 0,
-      THICK:          parseFloat(it.THICK)      || 0,
+      LNGS_STDR:      long,
+      SHRT_STDR:      short,
+      THICK:          thick,
       CLASS_NAME:     it.CLASS_NAME      || '',
       CLASS_NO:       it.CLASS_NO        || '',
       INGR_NAME_EN:   ingredientEn || it.CLASS_NAME || '',
@@ -69,47 +78,39 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ── 검색어 준비 ──────────────────────────────────────────────────────
-    // 원본 그대로 사용 (식약처 API는 입력값으로 시작하는 품목명을 반환)
     const q = query.trim();
 
     // 순차 시도: 원본 → 앞 4글자 → 앞 3글자 → 앞 2글자
-    const candidates = [
-      q,
-      q.substring(0, 4),
-      q.substring(0, 3),
-      q.substring(0, 2),
-    ].filter((v, i, arr) => v.length >= 2 && arr.indexOf(v) === i); // 중복·너무짧은것 제거
+    const candidates = [q, q.substring(0,4), q.substring(0,3), q.substring(0,2)]
+      .filter((v, i, arr) => v.length >= 2 && arr.indexOf(v) === i);
 
     let rawItems = [];
     for (const word of candidates) {
       console.log('MFDS 호출:', word);
       const items = await callMfds(word, 30);
-      // 크기 정보 있는 것만
-      const valid = items.filter(it => it.LNGS_STDR && it.SHRT_STDR);
+      // 크기 정보 있는 것 (LENG_LONG 또는 LNGS_STDR)
+      const valid = items.filter(it =>
+        (it.LENG_LONG || it.LNGS_STDR) && (it.LENG_SHORT || it.SHRT_STDR)
+      );
       if (valid.length > 0) {
         rawItems = valid;
-        console.log('MFDS 결과:', valid.length, '건 (검색어:', word + ')');
+        console.log('결과:', valid.length, '건 (검색어:', word + ')');
         break;
       }
     }
 
-    // 원본 검색어로 추가 필터 (검색어가 품목명에 포함되는 것만)
-    const keyword = q.replace(/\s/g, '');
-    let filtered = rawItems.filter(it => {
-      const name = (it.ITEM_NAME || '').replace(/\s/g, '');
-      // 검색어 앞 2글자가 품목명에 포함되면 OK
-      return name.includes(keyword.substring(0, 2));
-    });
-
-    // 필터 후 결과가 너무 적으면 필터 없이 전체 사용
+    // 검색어 앞 2글자가 품목명에 포함되는 것 필터
+    const keyword = q.replace(/\s/g, '').substring(0, 2);
+    let filtered = rawItems.filter(it =>
+      (it.ITEM_NAME || '').replace(/\s/g, '').includes(keyword)
+    );
     if (filtered.length === 0) filtered = rawItems;
 
-    // 검색어와 유사한 것 우선 정렬
+    // 검색어와 가까운 것 우선 정렬
     filtered.sort((a, b) => {
       const an = (a.ITEM_NAME || '').replace(/\s/g, '');
       const bn = (b.ITEM_NAME || '').replace(/\s/g, '');
-      const kw = keyword.substring(0, 3);
+      const kw = q.replace(/\s/g, '').substring(0, 3);
       const as = an.startsWith(kw) ? 0 : an.includes(kw) ? 1 : 2;
       const bs = bn.startsWith(kw) ? 0 : bn.includes(kw) ? 1 : 2;
       return as - bs;
@@ -117,7 +118,7 @@ export default async function handler(req, res) {
 
     let mfdsResult = filtered.map(normalize);
 
-    // ── 2단계: HIRA 급여 약가 조회 ───────────────────────────────────
+    // 2단계: HIRA 급여 약가 조회
     if (mfdsResult.length > 0 && HIRA_KEY) {
       const hiraResults = await Promise.all(
         mfdsResult.map(async it => {
@@ -159,10 +160,9 @@ export default async function handler(req, res) {
       return res.status(200).json(mfdsResult);
     }
 
-    // ── 3단계: Claude AI 보완 ─────────────────────────────────────────
+    // 3단계: Claude AI 보완
     if (!AI_KEY) return res.status(200).json([]);
 
-    console.log('3단계: Claude AI 보완');
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
