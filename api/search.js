@@ -9,33 +9,11 @@ export default async function handler(req, res) {
   if (!query) return res.status(400).json({ error: 'query is required' });
 
   const MFDS_KEY = process.env.MFDS_API_KEY;
-  const HIRA_KEY = process.env.HIRA_API_KEY;
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
+  // HIRA도 같은 공공데이터포털 키 사용 (HIRA_API_KEY 없으면 MFDS_KEY 사용)
+  const HIRA_KEY = process.env.HIRA_API_KEY || MFDS_KEY;
 
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
-
-  // MATERIAL_NAME → 영문 성분명 파싱 (있는 경우)
-  function parseIngredient(materialName) {
-    if (!materialName) return '';
-    return materialName
-      .split('|')
-      .map(p => p.trim())
-      .filter(p => /^[A-Za-z]/.test(p) && p.length > 1)
-      .join(' / ');
-  }
-
-  // ITEM_ENG_NAME에서 성분명만 추출
-  // 예: "Twynsta tablets 40/5" → "Twynsta"
-  // 예: "Trajenta tablets 5mg" → "Trajenta"
-  // 예: "Jardiance 10mg tablets" → "Jardiance"
-  // 브랜드명이므로 그대로 사용하되, tablets/mg/capsules 등 제형 정보 제거
-  function parseEngName(engName) {
-    if (!engName) return '';
-    return engName
-      .replace(/\b(tablets?|capsules?|film[- ]?coated|mg|mcg|ug|ml|\d+[\/\d.]*)\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
 
   async function callMfds(word, rows = 30) {
     const params = new URLSearchParams({
@@ -57,19 +35,7 @@ export default async function handler(req, res) {
     const long  = parseFloat(it.LENG_LONG  || it.LNGS_STDR) || 0;
     const short = parseFloat(it.LENG_SHORT || it.SHRT_STDR) || 0;
     const thick = parseFloat(it.THICK) || 0;
-
-    // 주성분 우선순위:
-    // 1. MATERIAL_NAME 영문 파싱 (있으면 가장 정확)
-    // 2. ITEM_ENG_NAME (영문 브랜드명/성분명)
-    // 3. 없으면 빈 문자열 (CLASS_NAME 절대 사용 안 함)
-    const ingredient =
-      parseIngredient(it.MATERIAL_NAME) ||
-      parseEngName(it.ITEM_ENG_NAME)    ||
-      '';
-
-    // 효능군: CLASS_NAME만 (혈압강하제, 당뇨병용제 등 한글)
     const hiraClass = it.CLASS_NAME || '';
-
     return {
       ITEM_SEQ:       it.ITEM_SEQ        || '',
       ITEM_NAME:      it.ITEM_NAME       || '',
@@ -84,11 +50,11 @@ export default async function handler(req, res) {
       LNGS_STDR:      long,
       SHRT_STDR:      short,
       THICK:          thick,
-      CLASS_NAME:     hiraClass,    // 효능군 (한글)
-      INGR_NAME_EN:   ingredient,   // 주성분 (영문, CLASS_NAME 절대 포함 안 함)
-      MATERIAL_NAME:  it.MATERIAL_NAME || '',
+      CLASS_NAME:     hiraClass,
+      INGR_NAME_EN:   '',
+      MATERIAL_NAME:  it.MATERIAL_NAME   || '',
       PRICE:          null,
-      PRICE_UNIT:     null,
+      PRICE_UNIT:     '정',
       HIRA_CLASS:     hiraClass,
     };
   }
@@ -107,47 +73,95 @@ export default async function handler(req, res) {
       if (valid.length > 0) { rawItems = valid; break; }
     }
 
-    const kw = q.replace(/\s/g, '').substring(0, 2);
+    const kw = q.replace(/\s/g,'').substring(0,2);
     let filtered = rawItems.filter(it =>
-      (it.ITEM_NAME || '').replace(/\s/g, '').includes(kw)
+      (it.ITEM_NAME||'').replace(/\s/g,'').includes(kw)
     );
     if (!filtered.length) filtered = rawItems;
 
-    filtered.sort((a, b) => {
-      const an = (a.ITEM_NAME || '').replace(/\s/g, '');
-      const bn = (b.ITEM_NAME || '').replace(/\s/g, '');
-      const k  = q.replace(/\s/g, '').substring(0, 3);
-      const as = an.startsWith(k) ? 0 : an.includes(k) ? 1 : 2;
-      const bs = bn.startsWith(k) ? 0 : bn.includes(k) ? 1 : 2;
-      return as - bs;
+    filtered.sort((a,b) => {
+      const an=(a.ITEM_NAME||'').replace(/\s/g,'');
+      const bn=(b.ITEM_NAME||'').replace(/\s/g,'');
+      const k=q.replace(/\s/g,'').substring(0,3);
+      return (an.startsWith(k)?0:an.includes(k)?1:2)-(bn.startsWith(k)?0:bn.includes(k)?1:2);
     });
 
     let mfdsResult = filtered.map(normalize);
 
-    // HIRA 약가
+    // ── HIRA 약가기준정보 조회 ──────────────────────────────────────────────
+    // 엔드포인트: https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList
+    // 파라미터: itemNm(품목명), ediCode(EDI코드)
     if (mfdsResult.length > 0 && HIRA_KEY) {
       mfdsResult = await Promise.all(mfdsResult.map(async it => {
         try {
-          const hiraUrl = 'https://apis.data.go.kr/B551182/msupRtrvl/getOudrugPrcList'
-            + '?serviceKey=' + encodeURIComponent(HIRA_KEY)
-            + '&pageNo=1&numOfRows=10&type=json'
-            + '&itemNm=' + encodeURIComponent(it.ITEM_NAME || '');
-          const hText = await (await fetch(hiraUrl)).text();
-          let hData; try { hData = JSON.parse(hText); } catch(e) { return it; }
-          const hBody = hData?.response?.body ?? hData?.body;
-          const raw = hBody?.items?.item;
-          if (!raw) return it;
-          const items = Array.isArray(raw) ? raw : [raw];
-          const best = items.find(p =>
-            (p.itemNm || '').includes(it.ITEM_NAME.substring(0, 4))
-          ) || items[0];
-          return {
-            ...it,
-            PRICE:      best.mxRbdAmt ? Number(best.mxRbdAmt) : null,
-            PRICE_UNIT: best.injcInjcUnitNm || '정',
-            HIRA_CLASS: best.clsNm || it.CLASS_NAME,
-          };
-        } catch(e) { return it; }
+          const hiraParams = new URLSearchParams({
+            serviceKey: HIRA_KEY,
+            pageNo:     '1',
+            numOfRows:  '10',
+            type:       'json',
+            itemNm:     it.ITEM_NAME || '',
+          });
+          const hiraUrl = 'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + hiraParams;
+          console.log('HIRA URL:', hiraUrl.substring(0, 150));
+
+          const hiraRes  = await fetch(hiraUrl);
+          const hiraText = await hiraRes.text();
+          console.log('HIRA raw:', hiraText.substring(0, 500));
+
+          let hiraData;
+          try { hiraData = JSON.parse(hiraText); }
+          catch(e) {
+            console.error('HIRA JSON parse error:', hiraText.substring(0, 200));
+            return it;
+          }
+
+          let priceItems = [];
+          const hBody = hiraData?.response?.body ?? hiraData?.body;
+          if (hBody?.items?.item) {
+            const raw = hBody.items.item;
+            priceItems = Array.isArray(raw) ? raw : [raw];
+          }
+
+          console.log('HIRA priceItems:', priceItems.length, priceItems[0] ? Object.keys(priceItems[0]).join(',') : 'none');
+
+          if (priceItems.length > 0) {
+            const best = priceItems.find(p =>
+              (p.itemNm || p.ITEM_NM || '').includes(it.ITEM_NAME.substring(0,4))
+            ) || priceItems[0];
+
+            console.log('HIRA best:', JSON.stringify(best).substring(0,300));
+
+            // getDgamtList 응답 필드명 (실제 API 명세 기준)
+            // mxRdln: 상한금액, uprc: 단가, shtRfndAmt: 단기급여상한
+            const price =
+              best.mxRdln    ?? // 상한금액
+              best.mxRbdAmt  ?? // 구 필드명 fallback
+              best.uprc      ?? // 단가
+              best.shtRfndAmt?? // 단기급여상한
+              null;
+
+            const unit =
+              best.unit     ||
+              best.prdtClsNm||
+              '정';
+
+            const cls =
+              best.clsNm    ||
+              best.className||
+              it.CLASS_NAME;
+
+            return {
+              ...it,
+              PRICE:      price !== null ? Number(price) : null,
+              PRICE_UNIT: unit,
+              HIRA_CLASS: cls || it.CLASS_NAME,
+            };
+          }
+          return it;
+        } catch(e) {
+          console.error('HIRA error:', it.ITEM_NAME, e.message);
+          return it;
+        }
       }));
     }
 
@@ -169,20 +183,21 @@ export default async function handler(req, res) {
         messages: [{
           role: 'user',
           content: q + ` 약품 낱알식별 JSON 배열.
-[{"ITEM_SEQ":"","ITEM_NAME":"품목명","ITEM_ENG_NAME":"Brand name","DRUG_SHPE":"원형","DRUG_COLO":"분홍","DRUG_COLO_BACK":"","PRINT_FRONT":"","PRINT_BACK":"","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","INGR_NAME_EN":"Linagliptin","MATERIAL_NAME":"","PRICE":null,"PRICE_UNIT":"정","HIRA_CLASS":"당뇨병용제"}]
+[{"ITEM_SEQ":"","ITEM_NAME":"품목명","ITEM_ENG_NAME":"","DRUG_SHPE":"원형","DRUG_COLO":"분홍","DRUG_COLO_BACK":"","PRINT_FRONT":"","PRINT_BACK":"","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","INGR_NAME_EN":"","MATERIAL_NAME":"","PRICE":null,"PRICE_UNIT":"정","HIRA_CLASS":"당뇨병용제"}]
 없으면[].`
         }]
       })
     });
     const aiData = await aiRes.json();
     if (aiData.error) return res.status(200).json([]);
-    const text = (aiData.content || []).map(b => b.text || '').join('');
-    const s = text.indexOf('['), e = text.lastIndexOf(']');
-    if (s === -1 || e === -1) return res.status(200).json([]);
-    const parsed = JSON.parse(text.substring(s, e + 1));
-    return res.status(200).json(parsed.filter(it => it.LNGS_STDR && it.SHRT_STDR));
+    const text = (aiData.content||[]).map(b=>b.text||'').join('');
+    const s=text.indexOf('['), e=text.lastIndexOf(']');
+    if (s===-1||e===-1) return res.status(200).json([]);
+    const parsed = JSON.parse(text.substring(s,e+1));
+    return res.status(200).json(parsed.filter(it=>it.LNGS_STDR&&it.SHRT_STDR));
 
   } catch(e) {
+    console.error('Fatal:', e.message);
     return res.status(500).json({ error: e.message });
   }
 }
