@@ -297,7 +297,7 @@ export default function App() {
           <div style={{width:1,height:24,background:"#e2e8f0",flexShrink:0}}/>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:"#1a1f36"}}>약품 실제 크기 비교</div>
-            <div style={{fontSize:10,color:"#64748b"}}>식약처 공식 낱알식별 데이터</div>
+            <div style={{fontSize:10,color:"#64748b"}}>식약처 공식 낱알식별 데이터 made by mujjinhwan</div>
           </div>
           <div style={{marginLeft:"auto",background:"#f1f5f9",border:"1px solid #e2e8f0",
             borderRadius:8,padding:"3px 8px",fontSize:10,fontFamily:"monospace",
