@@ -16,103 +16,108 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'MFDS_API_KEY 환경변수가 설정되지 않았습니다.' });
   }
 
+  // 식약처 API 호출 헬퍼 - item_name은 앞에서부터 일치하는 것 반환
+  async function callMfds(searchWord, rows = 20) {
+    const params = new URLSearchParams({
+      serviceKey: MFDS_KEY,
+      item_name:  searchWord,
+      type:       'json',
+      numOfRows:  String(rows),
+      pageNo:     '1',
+    });
+    const r = await fetch(
+      'https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + params
+    );
+    const d = await r.json();
+    const b1 = d?.body?.items;
+    const b2 = d?.response?.body?.items?.item;
+    if (b1) return Array.isArray(b1) ? b1 : [b1];
+    if (b2) return Array.isArray(b2) ? b2 : [b2];
+    return [];
+  }
+
+  // 결과 정규화
+  function normalize(it) {
+    let ingredientEn = '';
+    if (it.MATERIAL_NAME) {
+      ingredientEn = it.MATERIAL_NAME
+        .split('|')
+        .map(p => p.trim())
+        .filter(p => /[a-zA-Z]/.test(p) && p.length > 1)
+        .join(' / ');
+    }
+    return {
+      ITEM_SEQ:       it.ITEM_SEQ        || '',
+      ITEM_NAME:      it.ITEM_NAME       || '',
+      DRUG_SHPE:      it.DRUG_SHPE       || '',
+      DRUG_COLO:      it.DRUG_COLO_FRONT || it.DRUG_COLO || '',
+      DRUG_COLO_BACK: it.DRUG_COLO_BACK  || '',
+      PRINT_FRONT:    it.PRINT_FRONT     || '',
+      PRINT_BACK:     it.PRINT_BACK      || '',
+      FORM_CODE_NAME: it.FORM_CODE_NAME  || '',
+      ETC_OTC_NAME:   it.ETC_OTC_NAME    || '',
+      LNGS_STDR:      parseFloat(it.LNGS_STDR) || 0,
+      SHRT_STDR:      parseFloat(it.SHRT_STDR) || 0,
+      THICK:          parseFloat(it.THICK)      || 0,
+      CLASS_NAME:     it.CLASS_NAME      || '',
+      CLASS_NO:       it.CLASS_NO        || '',
+      INGR_NAME_EN:   ingredientEn || it.CLASS_NAME || '',
+      PRICE:          null,
+      PRICE_UNIT:     null,
+      HIRA_CLASS:     it.CLASS_NAME      || '',
+    };
+  }
+
   try {
-    // 검색어에서 숫자/단위/공백 제거 후 한글 앞부분만 추출
-    const cleaned = query
-      .replace(/[0-9]+(.[0-9]+)?s*(mg|mcg|ug|ml|g)/gi, '')
-      .replace(/[\s/\-]/g, '')
-      .trim();
+    // ── 검색어 준비 ──────────────────────────────────────────────────────
+    // 원본 그대로 사용 (식약처 API는 입력값으로 시작하는 품목명을 반환)
+    const q = query.trim();
 
-    // API 호출용: 앞 5글자 (너무 짧으면 결과 없음, 너무 길면 매칭 안됨)
-    const apiQuery = cleaned.substring(0, 5) || query.substring(0, 5);
+    // 순차 시도: 원본 → 앞 4글자 → 앞 3글자 → 앞 2글자
+    const candidates = [
+      q,
+      q.substring(0, 4),
+      q.substring(0, 3),
+      q.substring(0, 2),
+    ].filter((v, i, arr) => v.length >= 2 && arr.indexOf(v) === i); // 중복·너무짧은것 제거
 
-    console.log('원본:', query, '→ API검색어:', apiQuery);
-
-    // 1-1단계: 정제된 검색어로 API 호출
-    async function callMfds(searchWord) {
-      const params = new URLSearchParams({
-        serviceKey: MFDS_KEY,
-        item_name:  searchWord,
-        type:       'json',
-        numOfRows:  '20',
-        pageNo:     '1',
-      });
-      const r = await fetch(
-        'https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + params
-      );
-      const d = await r.json();
-      let items = [];
-      const b1 = d?.body?.items;
-      const b2 = d?.response?.body?.items?.item;
-      if (b1)      items = Array.isArray(b1) ? b1 : [b1];
-      else if (b2) items = Array.isArray(b2) ? b2 : [b2];
-      return items;
-    }
-
-    let rawItems = await callMfds(apiQuery);
-
-    // 결과 없으면 앞 3글자로 재시도
-    if (rawItems.length === 0 && cleaned.length >= 3) {
-      console.log('결과없음 → 3글자로 재시도:', cleaned.substring(0, 3));
-      rawItems = await callMfds(cleaned.substring(0, 3));
-    }
-
-    // 결과 없으면 원본 검색어 앞 4글자로 재시도
-    if (rawItems.length === 0) {
-      console.log('결과없음 → 원본 앞 4글자로 재시도:', query.substring(0, 4));
-      rawItems = await callMfds(query.substring(0, 4));
-    }
-
-    // 크기 정보 있는 것만 + 검색어 앞 2글자 포함 필터
-    const keyword = cleaned.substring(0, 2).toLowerCase();
-    const filtered = rawItems.filter(it => {
-      if (!it.LNGS_STDR || !it.SHRT_STDR) return false;
-      const name = (it.ITEM_NAME || '').replace(/\s/g, '').toLowerCase();
-      return name.includes(keyword);
-    });
-
-    // 검색어와 가까운 것 우선 정렬
-    filtered.sort((a, b) => {
-      const aName = (a.ITEM_NAME || '').toLowerCase().replace(/\s/g, '');
-      const bName = (b.ITEM_NAME || '').toLowerCase().replace(/\s/g, '');
-      const kw = cleaned.toLowerCase();
-      const aScore = aName.startsWith(kw.substring(0, 3)) ? 0 : aName.includes(kw.substring(0, 3)) ? 1 : 2;
-      const bScore = bName.startsWith(kw.substring(0, 3)) ? 0 : bName.includes(kw.substring(0, 3)) ? 1 : 2;
-      return aScore - bScore;
-    });
-
-    let mfdsResult = filtered.map(it => {
-      let ingredientEn = '';
-      if (it.MATERIAL_NAME) {
-        ingredientEn = it.MATERIAL_NAME
-          .split('|')
-          .map(p => p.trim())
-          .filter(p => /[a-zA-Z]/.test(p) && p.length > 1)
-          .join(' / ');
+    let rawItems = [];
+    for (const word of candidates) {
+      console.log('MFDS 호출:', word);
+      const items = await callMfds(word, 30);
+      // 크기 정보 있는 것만
+      const valid = items.filter(it => it.LNGS_STDR && it.SHRT_STDR);
+      if (valid.length > 0) {
+        rawItems = valid;
+        console.log('MFDS 결과:', valid.length, '건 (검색어:', word + ')');
+        break;
       }
-      return {
-        ITEM_SEQ:       it.ITEM_SEQ        || '',
-        ITEM_NAME:      it.ITEM_NAME       || '',
-        DRUG_SHPE:      it.DRUG_SHPE       || '',
-        DRUG_COLO:      it.DRUG_COLO_FRONT || it.DRUG_COLO || '',
-        DRUG_COLO_BACK: it.DRUG_COLO_BACK  || '',
-        PRINT_FRONT:    it.PRINT_FRONT     || '',
-        PRINT_BACK:     it.PRINT_BACK      || '',
-        FORM_CODE_NAME: it.FORM_CODE_NAME  || '',
-        ETC_OTC_NAME:   it.ETC_OTC_NAME    || '',
-        LNGS_STDR:      parseFloat(it.LNGS_STDR) || 0,
-        SHRT_STDR:      parseFloat(it.SHRT_STDR) || 0,
-        THICK:          parseFloat(it.THICK)      || 0,
-        CLASS_NAME:     it.CLASS_NAME      || '',
-        CLASS_NO:       it.CLASS_NO        || '',
-        INGR_NAME_EN:   ingredientEn || it.CLASS_NAME || '',
-        PRICE:          null,
-        PRICE_UNIT:     null,
-        HIRA_CLASS:     it.CLASS_NAME      || '',
-      };
+    }
+
+    // 원본 검색어로 추가 필터 (검색어가 품목명에 포함되는 것만)
+    const keyword = q.replace(/\s/g, '');
+    let filtered = rawItems.filter(it => {
+      const name = (it.ITEM_NAME || '').replace(/\s/g, '');
+      // 검색어 앞 2글자가 품목명에 포함되면 OK
+      return name.includes(keyword.substring(0, 2));
     });
 
-    // 2단계: HIRA 급여 약가 조회
+    // 필터 후 결과가 너무 적으면 필터 없이 전체 사용
+    if (filtered.length === 0) filtered = rawItems;
+
+    // 검색어와 유사한 것 우선 정렬
+    filtered.sort((a, b) => {
+      const an = (a.ITEM_NAME || '').replace(/\s/g, '');
+      const bn = (b.ITEM_NAME || '').replace(/\s/g, '');
+      const kw = keyword.substring(0, 3);
+      const as = an.startsWith(kw) ? 0 : an.includes(kw) ? 1 : 2;
+      const bs = bn.startsWith(kw) ? 0 : bn.includes(kw) ? 1 : 2;
+      return as - bs;
+    });
+
+    let mfdsResult = filtered.map(normalize);
+
+    // ── 2단계: HIRA 급여 약가 조회 ───────────────────────────────────
     if (mfdsResult.length > 0 && HIRA_KEY) {
       const hiraResults = await Promise.all(
         mfdsResult.map(async it => {
@@ -136,11 +141,10 @@ export default async function handler(req, res) {
                 (p.itemNm || '').includes(it.ITEM_NAME.substring(0, 4))
               ) || priceItems[0];
               const price = best.mxRbdAmt ?? best.uprc ?? null;
-              const unit  = best.injcInjcUnitNm || '정';
               return {
                 ...it,
                 PRICE:      price !== null ? Number(price) : null,
-                PRICE_UNIT: unit,
+                PRICE_UNIT: best.injcInjcUnitNm || '정',
                 HIRA_CLASS: best.clsNm || it.CLASS_NAME,
               };
             }
@@ -155,9 +159,10 @@ export default async function handler(req, res) {
       return res.status(200).json(mfdsResult);
     }
 
-    // 3단계: 식약처에 없으면 Claude AI 보완
+    // ── 3단계: Claude AI 보완 ─────────────────────────────────────────
     if (!AI_KEY) return res.status(200).json([]);
 
+    console.log('3단계: Claude AI 보완');
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -171,7 +176,7 @@ export default async function handler(req, res) {
         system:     'Korean pharmaceutical database. Return ONLY a JSON array. No markdown.',
         messages: [{
           role:    'user',
-          content: query + ` 약품 낱알식별 정보 JSON 배열로 반환.
+          content: q + ` 약품 낱알식별 정보 JSON 배열로 반환.
 [{"ITEM_SEQ":"","ITEM_NAME":"품목명","DRUG_SHPE":"원형","DRUG_COLO":"분홍","DRUG_COLO_BACK":"","PRINT_FRONT":"D5","PRINT_BACK":"","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","CLASS_NO":"396","INGR_NAME_EN":"Linagliptin","PRICE":null,"PRICE_UNIT":"정","HIRA_CLASS":"당뇨병용제"}]
 없으면 [].`
         }],
@@ -180,16 +185,12 @@ export default async function handler(req, res) {
 
     const aiData = await aiRes.json();
     if (aiData.error) return res.status(200).json([]);
-
     const text     = (aiData.content || []).map(b => b.text || '').join('');
     const startIdx = text.indexOf('[');
     const endIdx   = text.lastIndexOf(']');
     if (startIdx === -1 || endIdx === -1) return res.status(200).json([]);
-
     const parsed = JSON.parse(text.substring(startIdx, endIdx + 1));
-    return res.status(200).json(
-      parsed.filter(it => it.LNGS_STDR && it.SHRT_STDR)
-    );
+    return res.status(200).json(parsed.filter(it => it.LNGS_STDR && it.SHRT_STDR));
 
   } catch (e) {
     console.error('Search handler fatal error:', e);
