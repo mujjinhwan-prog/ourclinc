@@ -17,36 +17,54 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 부분검색: 숫자/단위 제거 후 앞 6글자로 API 호출
-    const shortQuery = query
-      .replace(/[0-9]+(.[0-9]+)?(mg|mcg|ug|ml|g|정|캡슐|mg\/|\/)*/gi, '')
-      .trim()
-      .substring(0, 6);
+    // 검색어에서 숫자/단위/공백 제거 후 한글 앞부분만 추출
+    const cleaned = query
+      .replace(/[0-9]+(.[0-9]+)?s*(mg|mcg|ug|ml|g)/gi, '')
+      .replace(/[\s/\-]/g, '')
+      .trim();
 
-    console.log('원본:', query, '→ 단축:', shortQuery);
+    // API 호출용: 앞 5글자 (너무 짧으면 결과 없음, 너무 길면 매칭 안됨)
+    const apiQuery = cleaned.substring(0, 5) || query.substring(0, 5);
 
-    // 1단계: 식약처 낱알식별 API
-    const mfdsParams = new URLSearchParams({
-      serviceKey: MFDS_KEY,
-      item_name:  shortQuery,
-      type:       'json',
-      numOfRows:  '20',
-      pageNo:     '1',
-    });
+    console.log('원본:', query, '→ API검색어:', apiQuery);
 
-    const mfdsRes  = await fetch(
-      'https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + mfdsParams
-    );
-    const mfdsData = await mfdsRes.json();
+    // 1-1단계: 정제된 검색어로 API 호출
+    async function callMfds(searchWord) {
+      const params = new URLSearchParams({
+        serviceKey: MFDS_KEY,
+        item_name:  searchWord,
+        type:       'json',
+        numOfRows:  '20',
+        pageNo:     '1',
+      });
+      const r = await fetch(
+        'https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + params
+      );
+      const d = await r.json();
+      let items = [];
+      const b1 = d?.body?.items;
+      const b2 = d?.response?.body?.items?.item;
+      if (b1)      items = Array.isArray(b1) ? b1 : [b1];
+      else if (b2) items = Array.isArray(b2) ? b2 : [b2];
+      return items;
+    }
 
-    let rawItems = [];
-    const b1 = mfdsData?.body?.items;
-    const b2 = mfdsData?.response?.body?.items?.item;
-    if (b1)      rawItems = Array.isArray(b1) ? b1 : [b1];
-    else if (b2) rawItems = Array.isArray(b2) ? b2 : [b2];
+    let rawItems = await callMfds(apiQuery);
 
-    // 원본 검색어 앞 2글자 이상 포함 + 크기 정보 있는 것만 필터
-    const keyword = query.replace(/\s/g, '').toLowerCase().substring(0, 2);
+    // 결과 없으면 앞 3글자로 재시도
+    if (rawItems.length === 0 && cleaned.length >= 3) {
+      console.log('결과없음 → 3글자로 재시도:', cleaned.substring(0, 3));
+      rawItems = await callMfds(cleaned.substring(0, 3));
+    }
+
+    // 결과 없으면 원본 검색어 앞 4글자로 재시도
+    if (rawItems.length === 0) {
+      console.log('결과없음 → 원본 앞 4글자로 재시도:', query.substring(0, 4));
+      rawItems = await callMfds(query.substring(0, 4));
+    }
+
+    // 크기 정보 있는 것만 + 검색어 앞 2글자 포함 필터
+    const keyword = cleaned.substring(0, 2).toLowerCase();
     const filtered = rawItems.filter(it => {
       if (!it.LNGS_STDR || !it.SHRT_STDR) return false;
       const name = (it.ITEM_NAME || '').replace(/\s/g, '').toLowerCase();
@@ -55,12 +73,12 @@ export default async function handler(req, res) {
 
     // 검색어와 가까운 것 우선 정렬
     filtered.sort((a, b) => {
-      const aName = (a.ITEM_NAME || '').toLowerCase();
-      const bName = (b.ITEM_NAME || '').toLowerCase();
-      const sq = shortQuery.toLowerCase();
-      const aMatch = aName.startsWith(sq) ? 0 : 1;
-      const bMatch = bName.startsWith(sq) ? 0 : 1;
-      return aMatch - bMatch;
+      const aName = (a.ITEM_NAME || '').toLowerCase().replace(/\s/g, '');
+      const bName = (b.ITEM_NAME || '').toLowerCase().replace(/\s/g, '');
+      const kw = cleaned.toLowerCase();
+      const aScore = aName.startsWith(kw.substring(0, 3)) ? 0 : aName.includes(kw.substring(0, 3)) ? 1 : 2;
+      const bScore = bName.startsWith(kw.substring(0, 3)) ? 0 : bName.includes(kw.substring(0, 3)) ? 1 : 2;
+      return aScore - bScore;
     });
 
     let mfdsResult = filtered.map(it => {
@@ -103,19 +121,16 @@ export default async function handler(req, res) {
               + '?serviceKey=' + encodeURIComponent(HIRA_KEY)
               + '&pageNo=1&numOfRows=10&type=json'
               + '&itemNm=' + encodeURIComponent(it.ITEM_NAME || '');
-
             const hiraRes  = await fetch(hiraUrl);
             const hiraText = await hiraRes.text();
             let hiraData;
             try { hiraData = JSON.parse(hiraText); } catch(e) { return it; }
-
             let priceItems = [];
             const hBody = hiraData?.response?.body ?? hiraData?.body;
             if (hBody?.items?.item) {
               const raw = hBody.items.item;
               priceItems = Array.isArray(raw) ? raw : [raw];
             }
-
             if (priceItems.length > 0) {
               const best = priceItems.find(p =>
                 (p.itemNm || '').includes(it.ITEM_NAME.substring(0, 4))
@@ -130,9 +145,7 @@ export default async function handler(req, res) {
               };
             }
             return it;
-          } catch (e) {
-            return it;
-          }
+          } catch (e) { return it; }
         })
       );
       mfdsResult = hiraResults;
