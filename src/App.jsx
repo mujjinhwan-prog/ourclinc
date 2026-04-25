@@ -27,7 +27,6 @@ async function fetchDrug(query) {
     thickness:it.THICK?parseFloat(it.THICK):null,
     shape:parseShape(it.DRUG_SHPE), shapeKr:it.DRUG_SHPE||"",
     colorName:it.DRUG_COLO||"",
-    mark:(it.PRINT_FRONT||"")+(it.PRINT_BACK?" / "+it.PRINT_BACK:""),
     ingredient:it.INGR_NAME_EN||it.CLASS_NAME||"",
     hiraClass:it.HIRA_CLASS||it.CLASS_NAME||"",
     formName:it.FORM_CODE_NAME||"",
@@ -53,10 +52,6 @@ function PillShape({ pill, pxPerMm, accentColor }) {
           <div style={{position:"absolute",top:"8%",left:"15%",right:"30%",height:"12%",
             background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.9),transparent)",
             borderRadius:99,filter:"blur(1px)",transform:"rotate(-8deg)"}}/>
-          <span style={{position:"relative",zIndex:1,fontFamily:"monospace",fontWeight:700,
-            fontSize:Math.max(6,Math.min(wPx,hPx)*0.17),color:"rgba(80,80,80,0.7)",userSelect:"none"}}>
-            {(pill.mark||"").split("/")[0].trim()}
-          </span>
         </div>
         <div style={{position:"absolute",right:-26,top:0,height:hPx,display:"flex",alignItems:"center",gap:2}}>
           <div style={{width:2,height:"100%",background:accentColor+"bb",borderRadius:1,position:"relative"}}>
@@ -123,7 +118,6 @@ export default function App() {
     <div style={{fontFamily:"'Noto Sans KR',sans-serif",background:"#f0f4f8",minHeight:"100vh",color:"#1a1f36"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-        @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
         @keyframes dropIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
         @keyframes spin{to{transform:rotate(360deg)}}
         *{box-sizing:border-box}
@@ -342,14 +336,6 @@ export default function App() {
                     {selected.map((p,i)=>(
                       <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",fontFamily:"monospace",fontSize:13,fontWeight:700,color:ACCENT[i]}}>
                         {p.width}×{p.height}mm{p.thickness?"×"+p.thickness:""}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr>
-                    <th>각인</th>
-                    {selected.map((p,i)=>(
-                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",fontFamily:"monospace",fontSize:12,color:"#1a1f36"}}>
-                        {p.mark||"-"}
                       </td>
                     ))}
                   </tr>
