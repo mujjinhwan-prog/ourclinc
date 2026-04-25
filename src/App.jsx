@@ -29,8 +29,6 @@ async function fetchDrug(query) {
     colorName:it.DRUG_COLO||"",
     mark:(it.PRINT_FRONT||"")+(it.PRINT_BACK?" / "+it.PRINT_BACK:""),
     ingredient:it.INGR_NAME_EN||it.CLASS_NAME||"",
-    price:it.PRICE||null,
-    priceUnit:it.PRICE_UNIT||"정",
     hiraClass:it.HIRA_CLASS||it.CLASS_NAME||"",
     formName:it.FORM_CODE_NAME||"",
     etcOtc:it.ETC_OTC_NAME||"",
@@ -136,7 +134,6 @@ export default function App() {
         .compare-table tr:hover td{background:#fafbff}
       `}</style>
 
-      {/* 헤더 */}
       <div style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 20px",
         position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
         <div style={{maxWidth:960,margin:"0 auto",height:66,display:"flex",alignItems:"center",gap:14}}>
@@ -156,11 +153,8 @@ export default function App() {
       </div>
 
       <div style={{maxWidth:960,margin:"0 auto",padding:"20px 16px 60px"}}>
-
-        {/* 검색 패널 */}
         <div style={{background:"white",borderRadius:16,padding:20,marginBottom:16,
           boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
-
           <div style={{display:"flex",gap:8,marginBottom:12}}>
             <div style={{flex:1,position:"relative"}} ref={inRef}>
               <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",
@@ -204,7 +198,6 @@ export default function App() {
                               {r.etcOtc.includes("전문")?"전문":"일반"}</span>}
                             {r.formName&&<span style={{background:"#eff6ff",color:"#3b5bdb",padding:"1px 5px",borderRadius:3,fontSize:10}}>{r.formName}</span>}
                             {r.colorName&&<span>{r.colorName}</span>}
-                            {r.price&&<span style={{color:"#e67700",fontWeight:700}}>💰{Number(r.price).toLocaleString()}원/{r.priceUnit}</span>}
                           </div>
                         </div>
                         <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,
@@ -265,7 +258,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* 비교 테이블 */}
         {selected.length > 0 && (
           <div style={{background:"white",borderRadius:16,overflow:"hidden",
             boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
@@ -294,7 +286,6 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* 실제 크기 */}
                   <tr>
                     <th>실제 크기<br/><span style={{fontSize:9,fontWeight:400,color:"#94a3b8"}}>실물 비례</span></th>
                     {selected.map((p,i)=>(
@@ -312,7 +303,6 @@ export default function App() {
                       </td>
                     ))}
                   </tr>
-                  {/* 구분 */}
                   <tr>
                     <th>구분</th>
                     {selected.map((p,i)=>(
@@ -327,7 +317,6 @@ export default function App() {
                       </td>
                     ))}
                   </tr>
-                  {/* 제형 */}
                   <tr>
                     <th>제형</th>
                     {selected.map((p,i)=>(
@@ -340,7 +329,6 @@ export default function App() {
                       </td>
                     ))}
                   </tr>
-                  {/* 색상·모양 */}
                   <tr>
                     <th>색상·모양</th>
                     {selected.map((p,i)=>(
@@ -349,7 +337,6 @@ export default function App() {
                       </td>
                     ))}
                   </tr>
-                  {/* 크기 */}
                   <tr>
                     <th>크기</th>
                     {selected.map((p,i)=>(
@@ -358,7 +345,6 @@ export default function App() {
                       </td>
                     ))}
                   </tr>
-                  {/* 각인 */}
                   <tr>
                     <th>각인</th>
                     {selected.map((p,i)=>(
@@ -367,7 +353,6 @@ export default function App() {
                       </td>
                     ))}
                   </tr>
-                  {/* 주성분 */}
                   <tr>
                     <th>주성분</th>
                     {selected.map((p,i)=>(
@@ -376,25 +361,11 @@ export default function App() {
                       </td>
                     ))}
                   </tr>
-                  {/* 효능군 */}
                   <tr>
                     <th>효능군</th>
                     {selected.map((p,i)=>(
                       <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",fontSize:12,color:"#64748b"}}>
                         {p.hiraClass||"-"}
-                      </td>
-                    ))}
-                  </tr>
-                  {/* 약가 */}
-                  <tr>
-                    <th>약가</th>
-                    {selected.map((p,i)=>(
-                      <td key={p.id} style={{borderLeft:"1px solid #f1f5f9"}}>
-                        {p.price ? (
-                          <span style={{color:"#e67700",fontWeight:700,fontSize:13}}>
-                            {Number(p.price).toLocaleString()}원/{p.priceUnit}
-                          </span>
-                        ) : <span style={{color:"#94a3b8",fontSize:12}}>-</span>}
                       </td>
                     ))}
                   </tr>
