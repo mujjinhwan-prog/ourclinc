@@ -12,6 +12,16 @@ function parseShape(s) {
 }
 const ACCENT = ["#3b5bdb","#7048e8","#0ca678","#e67700","#c2255c","#1098ad","#2f9e44","#862e9c"];
 
+// MATERIAL_NAME 파싱: 영문 성분명만 추출
+function parseIngredient(materialName) {
+  if (!materialName) return "";
+  // 파이프(|)로 구분된 각 성분에서 영문명 추출
+  // 예: "텔미사르탄|Telmisartan|암로디핀베실산염|Amlodipine besylate"
+  const parts = materialName.split("|").map(p => p.trim());
+  const engParts = parts.filter(p => /^[A-Za-z]/.test(p) && p.length > 1);
+  return engParts.join(" / ");
+}
+
 async function fetchDrug(query) {
   const r = await fetch("/api/search", {
     method:"POST", headers:{"Content-Type":"application/json"},
@@ -20,20 +30,29 @@ async function fetchDrug(query) {
   if (!r.ok) throw new Error("서버 오류: " + r.status);
   const raw = await r.json();
   if (raw.error) throw new Error(raw.error);
-  return raw.filter(it => it.LNGS_STDR && it.SHRT_STDR).map((it,i) => ({
-    id: (it.ITEM_NAME||"p")+"_"+i,
-    name: it.ITEM_NAME||"",
-    width: parseFloat(it.LNGS_STDR)||0,
-    height: parseFloat(it.SHRT_STDR)||0,
-    thickness: it.THICK ? parseFloat(it.THICK) : null,
-    shape: parseShape(it.DRUG_SHPE),
-    shapeKr: it.DRUG_SHPE||"",
-    colorName: it.DRUG_COLO||"",
-    formName: it.FORM_CODE_NAME||"",
-    etcOtc: it.ETC_OTC_NAME||"",
-    ingredient: it.INGR_NAME_EN||"",
-    hiraClass: it.HIRA_CLASS||it.CLASS_NAME||"",
-  }));
+  return raw.filter(it => it.LNGS_STDR && it.SHRT_STDR).map((it,i) => {
+    // 주성분: MATERIAL_NAME에서 직접 파싱 (가장 정확)
+    // INGR_NAME_EN은 fallback
+    const ingredient = parseIngredient(it.MATERIAL_NAME)
+      || it.INGR_NAME_EN
+      || "";
+    // 효능군: CLASS_NAME (HIRA_CLASS와 별도)
+    const hiraClass = it.HIRA_CLASS || it.CLASS_NAME || "";
+    return {
+      id: (it.ITEM_NAME||"p")+"_"+i,
+      name: it.ITEM_NAME||"",
+      width: parseFloat(it.LNGS_STDR)||0,
+      height: parseFloat(it.SHRT_STDR)||0,
+      thickness: it.THICK ? parseFloat(it.THICK) : null,
+      shape: parseShape(it.DRUG_SHPE),
+      shapeKr: it.DRUG_SHPE||"",
+      colorName: it.DRUG_COLO||"",
+      formName: it.FORM_CODE_NAME||"",
+      etcOtc: it.ETC_OTC_NAME||"",
+      ingredient,
+      hiraClass,
+    };
+  });
 }
 
 function PillShape({ pill, pxPerMm, accentColor }) {
@@ -104,11 +123,9 @@ function CompareTable({ items, globalIdx, pxPerMm, onRemove }) {
                   .replace(/([^\s])\(/g,"$1\n(")
                   .split("\n");
                 return (
-                  <th key={p.id} style={{
-                    textAlign:"center",background:"#f8fafc",
+                  <th key={p.id} style={{textAlign:"center",background:"#f8fafc",
                     borderLeft:"1px solid #f1f5f9",borderBottom:"1px solid #f1f5f9",
-                    padding:"8px 4px",minWidth:120,maxWidth:160,
-                  }}>
+                    padding:"8px 4px",minWidth:120,maxWidth:160}}>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
                       <span style={{width:7,height:7,borderRadius:"50%",background:ACCENT[gi],display:"inline-block"}}/>
                       <span style={{fontSize:10,fontWeight:700,color:ACCENT[gi],lineHeight:1.35,
@@ -127,6 +144,7 @@ function CompareTable({ items, globalIdx, pxPerMm, onRemove }) {
             </tr>
           </thead>
           <tbody>
+            {/* 실제 크기 */}
             <tr>
               <TH>실제 크기<br/><span style={{fontSize:9,fontWeight:400,color:"#94a3b8"}}>실물 비례</span></TH>
               {items.map((p,i) => {
@@ -149,6 +167,7 @@ function CompareTable({ items, globalIdx, pxPerMm, onRemove }) {
                 );
               })}
             </tr>
+            {/* 구분 */}
             <tr>
               <TH>구분</TH>
               {items.map((p,i) => (
@@ -164,6 +183,7 @@ function CompareTable({ items, globalIdx, pxPerMm, onRemove }) {
                 </td>
               ))}
             </tr>
+            {/* 제형 */}
             <tr>
               <TH>제형</TH>
               {items.map((p,i) => (
@@ -178,6 +198,7 @@ function CompareTable({ items, globalIdx, pxPerMm, onRemove }) {
                 </td>
               ))}
             </tr>
+            {/* 색상·모양 */}
             <tr>
               <TH>색상·모양</TH>
               {items.map((p,i) => (
@@ -187,6 +208,7 @@ function CompareTable({ items, globalIdx, pxPerMm, onRemove }) {
                 </td>
               ))}
             </tr>
+            {/* 크기 */}
             <tr>
               <TH>크기</TH>
               {items.map((p,i) => {
@@ -201,21 +223,32 @@ function CompareTable({ items, globalIdx, pxPerMm, onRemove }) {
                 );
               })}
             </tr>
+            {/* 주성분 — MATERIAL_NAME에서 파싱한 영문 성분명 */}
             <tr>
               <TH>주성분</TH>
               {items.map((p,i) => (
                 <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",borderBottom:"1px solid #f1f5f9",
-                  padding:"8px 6px",textAlign:"center",verticalAlign:"middle",fontSize:10,color:"#64748b",lineHeight:1.4}}>
-                  {p.ingredient||"-"}
+                  padding:"8px 6px",textAlign:"center",verticalAlign:"middle"}}>
+                  {p.ingredient ? (
+                    <span style={{fontSize:10,color:"#374151",lineHeight:1.5,display:"block",wordBreak:"break-word"}}>
+                      {p.ingredient}
+                    </span>
+                  ) : <span style={{color:"#94a3b8",fontSize:10}}>-</span>}
                 </td>
               ))}
             </tr>
+            {/* 효능군 — CLASS_NAME */}
             <tr>
               <TH>효능군</TH>
               {items.map((p,i) => (
                 <td key={p.id} style={{borderLeft:"1px solid #f1f5f9",
-                  padding:"8px 6px",textAlign:"center",verticalAlign:"middle",fontSize:10,color:"#64748b"}}>
-                  {p.hiraClass||"-"}
+                  padding:"8px 6px",textAlign:"center",verticalAlign:"middle"}}>
+                  {p.hiraClass ? (
+                    <span style={{fontSize:10,color:"#64748b",background:"#f8fafc",
+                      padding:"2px 8px",borderRadius:50,display:"inline-block"}}>
+                      {p.hiraClass}
+                    </span>
+                  ) : <span style={{color:"#94a3b8",fontSize:10}}>-</span>}
                 </td>
               ))}
             </tr>
@@ -232,8 +265,6 @@ export default function App() {
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
   const [showDrop,setShowDrop]=useState(false);
-  // selected: 약품 객체 배열
-  // breaks: 줄바꿈 삽입 위치 Set (약품 인덱스 앞에 줄바꿈)
   const [selected,setSelected]=useState([]);
   const [breaks,setBreaks]=useState(new Set());
   const [pxPerMm,setPxPerMm]=useState(3.7795);
@@ -243,7 +274,7 @@ export default function App() {
   const inRef=useRef(null);
   const dropRef=useRef(null);
   const MAX = 8;
-  const AUTO_BREAK = 4; // 4개마다 자동 줄바꿈
+  const AUTO_BREAK = 4;
 
   useEffect(()=>{
     const el=document.createElement("div");
@@ -293,7 +324,6 @@ export default function App() {
     setSelected(p=>{
       const idx=p.findIndex(x=>x.id===id);
       const next=p.filter(x=>x.id!==id);
-      // 해당 인덱스의 breaks 제거 및 재조정
       setBreaks(prev=>{
         const nb=new Set();
         prev.forEach(b=>{ if(b!==idx) nb.add(b>idx?b-1:b); });
@@ -308,8 +338,6 @@ export default function App() {
     const ppm=v/25.4; setPxPerMm(ppm);
     setDpiInfo(v+" PPI (수동) · "+ppm.toFixed(2)+"px/mm");
   };
-
-  // 현재 선택된 약품 뒤에 줄바꿈 삽입/제거 토글
   const toggleBreak=(afterIdx)=>{
     setBreaks(prev=>{
       const nb=new Set(prev);
@@ -319,7 +347,6 @@ export default function App() {
     });
   };
 
-  // 그룹 생성: breaks + 자동 4개 제한
   function getGroups() {
     const groups=[];
     let cur=[];
@@ -328,14 +355,12 @@ export default function App() {
       const isManualBreak=breaks.has(i+1);
       const isAutoBreak=cur.length>=AUTO_BREAK;
       if((isManualBreak||isAutoBreak)&&i<selected.length-1){
-        groups.push([...cur]);
-        cur=[];
+        groups.push([...cur]); cur=[];
       }
     });
     if(cur.length>0) groups.push(cur);
     return groups;
   }
-
   const groups=getGroups();
 
   return (
@@ -353,7 +378,6 @@ export default function App() {
         }
       `}</style>
 
-      {/* 헤더 */}
       <div style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 16px",
         position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
         <div style={{maxWidth:1400,margin:"0 auto",height:58,display:"flex",alignItems:"center",gap:12}}>
@@ -373,7 +397,6 @@ export default function App() {
         <div style={{background:"white",borderRadius:16,padding:14,marginBottom:14,
           boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
 
-          {/* 검색바 */}
           <div className="search-bar-wrap" style={{display:"flex",gap:8,marginBottom:10,position:"relative",zIndex:200}}>
             <div className="search-input-wrap" style={{flex:1,position:"relative",minWidth:0}} ref={inRef}>
               <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",
@@ -445,7 +468,6 @@ export default function App() {
                 whiteSpace:"nowrap",transition:"all 0.2s"}}>🔄 초기화</button>
           </div>
 
-          {/* 선택 약품 태그 + 줄바꿈 버튼 */}
           <div style={{display:"flex",flexWrap:"wrap",gap:5,alignItems:"center",minHeight:32,marginBottom:10}}>
             {selected.length===0 ? (
               <span style={{fontSize:12,color:"#94a3b8",fontFamily:"monospace"}}>약품을 검색하여 추가하세요 (최대 {MAX}개, 4개씩 자동 줄바꿈)</span>
@@ -453,7 +475,6 @@ export default function App() {
               <>
                 {selected.map((p,i)=>(
                   <div key={p.id} style={{display:"flex",alignItems:"center",gap:4}}>
-                    {/* 약품 태그 */}
                     <div style={{display:"flex",alignItems:"center",gap:5,
                       background:"#eff6ff",border:"1.5px solid "+ACCENT[i]+"55",borderRadius:50,
                       padding:"3px 9px 3px 7px",fontSize:11,fontWeight:600,color:ACCENT[i]}}>
@@ -464,19 +485,15 @@ export default function App() {
                         onMouseEnter={e=>e.target.style.color="#e03131"}
                         onMouseLeave={e=>e.target.style.color=ACCENT[i]+"99"}>×</button>
                     </div>
-                    {/* 줄바꿈 버튼 — 마지막 약품 뒤에는 표시 안 함 */}
                     {i < selected.length-1 && (
-                      <button
-                        onClick={()=>toggleBreak(i+1)}
+                      <button onClick={()=>toggleBreak(i+1)}
                         title={breaks.has(i+1)?"줄바꿈 제거":"여기서 줄바꿈"}
-                        style={{
-                          padding:"2px 7px",fontSize:10,borderRadius:6,cursor:"pointer",
+                        style={{padding:"2px 7px",fontSize:10,borderRadius:6,cursor:"pointer",
                           fontFamily:"inherit",fontWeight:600,transition:"all 0.15s",
                           border:"1.5px solid "+(breaks.has(i+1)?"#3b5bdb":"#e2e8f0"),
                           background:breaks.has(i+1)?"#eff6ff":"#f8fafc",
-                          color:breaks.has(i+1)?"#3b5bdb":"#94a3b8",
-                        }}>
-                        {breaks.has(i+1)?"↩ 줄바꿈":"↵"}
+                          color:breaks.has(i+1)?"#3b5bdb":"#94a3b8"}}>
+                        {breaks.has(i+1)?"↩ 줄":"↵"}
                       </button>
                     )}
                   </div>
@@ -486,7 +503,6 @@ export default function App() {
             )}
           </div>
 
-          {/* PPI 보정 */}
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",
             background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,
             padding:"6px 12px",fontSize:12,color:"#3730a3"}}>
@@ -503,7 +519,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* 비교 테이블 */}
         {selected.length > 0 && groups.map((groupIdx, gi) => (
           <div key={gi}>
             {groups.length > 1 && (
