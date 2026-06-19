@@ -10,11 +10,20 @@ export default async function handler(req, res) {
 
   const MFDS_KEY = process.env.MFDS_API_KEY;
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
-  const HIRA_KEY = process.env.HIRA_API_KEY || MFDS_KEY;
 
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
-  // ─── 식약처 낱알식별 조회 ───────────────────────────────────────────────
+  // ─── 공통 fetch 헤더 (브라우저 위장) ────────────────────────────────────────
+  const BROWSER_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Referer': 'https://www.health.kr/',
+    'Connection': 'keep-alive',
+  };
+
+  // ─── 식약처 낱알식별 조회 ────────────────────────────────────────────────────
   async function callMfds(word, rows = 30) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
@@ -31,175 +40,132 @@ export default async function handler(req, res) {
     return [];
   }
 
-  // ─── 식약처 의약품 가격정보 조회 (getMdcinPrceInfo) ──────────────────────
-  // 공공데이터포털: 1471000/MdcinPrceInfoService/getMdcinPrceInfo01
-  async function callMfdsPrice(itemName) {
-    try {
-      const params = new URLSearchParams({
-        serviceKey:  MFDS_KEY,
-        item_name:   itemName,
-        type:        'json',
-        numOfRows:   '20',
-        pageNo:      '1',
-      });
-      const r = await fetch(
-        'https://apis.data.go.kr/1471000/MdcinPrceInfoService/getMdcinPrceInfo01?' + params
-      );
-      const d = await r.json();
-      const items =
-        d?.body?.items ||
-        d?.response?.body?.items?.item ||
-        null;
-      if (!items) return null;
-      const arr = Array.isArray(items) ? items : [items];
-      if (!arr.length) return null;
-      // 품목명 일치도 기준으로 best 선택
-      const keyword = itemName.replace(/\s/g, '').substring(0, 5);
-      const best = arr.find(p =>
-        (p.ITEM_NAME || p.itemNm || '').replace(/\s/g, '').includes(keyword)
-      ) || arr[0];
-      const price =
-        best.MAX_PRICE  ??   // 상한금액
-        best.SGNG_PRICE ??   // 표준가격
-        best.PRICE      ??
-        null;
-      const unit = best.PACK_UNIT || best.UNIT || '정';
-      return price !== null ? { price: Number(price), unit } : null;
-    } catch (e) {
-      console.error('MFDS price error:', e.message);
-      return null;
-    }
-  }
-
-  // ─── HIRA 약가기준정보 조회 ──────────────────────────────────────────────
-  async function callHiraPrice(itemName) {
-    if (!HIRA_KEY) return null;
-    try {
-      // 1차 시도: dgamtCrtrInfoService1.2
-      const p1 = new URLSearchParams({
-        serviceKey: HIRA_KEY,
-        pageNo:     '1',
-        numOfRows:  '20',
-        type:       'json',
-        itemNm:     itemName,
-      });
-      const r1 = await fetch(
-        'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + p1
-      );
-      const text1 = await r1.text();
-      let data1;
-      try { data1 = JSON.parse(text1); } catch { data1 = null; }
-
-      let priceItems = [];
-      if (data1) {
-        const hBody = data1?.response?.body ?? data1?.body;
-        if (hBody?.items?.item) {
-          const raw = hBody.items.item;
-          priceItems = Array.isArray(raw) ? raw : [raw];
-        }
-      }
-
-      // 2차 시도: 급여의약품 기준금액 정보 서비스
-      if (!priceItems.length) {
-        const p2 = new URLSearchParams({
-          serviceKey: HIRA_KEY,
-          pageNo:     '1',
-          numOfRows:  '20',
-          type:       'json',
-          drugNm:     itemName,
-        });
-        const r2 = await fetch(
-          'https://apis.data.go.kr/B551182/msInsrDrugPrceInfoService1/getDrugPrceInfo1?' + p2
-        );
-        const text2 = await r2.text();
-        let data2;
-        try { data2 = JSON.parse(text2); } catch { data2 = null; }
-        if (data2) {
-          const b2 = data2?.response?.body ?? data2?.body;
-          if (b2?.items?.item) {
-            const raw = b2.items.item;
-            priceItems = Array.isArray(raw) ? raw : [raw];
-          }
-        }
-      }
-
-      if (!priceItems.length) return null;
-
-      const keyword = itemName.replace(/\s/g, '').substring(0, 4);
-      const best = priceItems.find(p =>
-        (p.itemNm || p.ITEM_NM || p.drugNm || '').replace(/\s/g, '').includes(keyword)
-      ) || priceItems[0];
-
-      const price =
-        best.mxRdln     ??
-        best.mxRbdAmt   ??
-        best.uprc       ??
-        best.shtRfndAmt ??
-        best.clmPrc     ??
-        null;
-
-      const unit =
-        best.unit        ||
-        best.prdtClsNm   ||
-        best.pakUnitCd   ||
-        '정';
-
-      const cls =
-        best.clsNm       ||
-        best.className   ||
-        null;
-
-      return price !== null
-        ? { price: Number(price), unit, hiraClass: cls }
-        : null;
-    } catch (e) {
-      console.error('HIRA price error:', e.message);
-      return null;
-    }
-  }
-
-  // ─── 약학정보원 HTML 스크래핑 (서버사이드 — 캐시 활용) ──────────────────
-  // 약학정보원은 HTML 응답이라 서버에서만 접근 가능
-  // URL: https://www.health.kr/searchDrug/result_drug.asp?drug_name=XXX
+  // ─── 약학정보원 보험가 스크래핑 ─────────────────────────────────────────────
+  // 1단계: 검색 결과 페이지에서 itemId 추출
+  // 2단계: 상세 페이지에서 보험급여가 추출
   async function callHealthKrPrice(itemName) {
     try {
-      const encoded = encodeURIComponent(itemName.substring(0, 10));
-      const url = `https://www.health.kr/searchDrug/result_drug.asp?drug_name=${encoded}`;
-      const r = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html,application/xhtml+xml',
-          'Accept-Language': 'ko-KR,ko;q=0.9',
-          'Referer': 'https://www.health.kr/',
-        },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!r.ok) return null;
-      const html = await r.text();
+      // ── 1단계: 검색 ──────────────────────────────────────────────────────────
+      const searchUrl = 'https://www.health.kr/searchDrug/result_drug.asp?drug_name='
+        + encodeURIComponent(itemName.replace(/\(.*\)/, '').trim()); // 괄호 부분 제거 후 검색
 
-      // 보험급여가 패턴 추출
-      // 예: "보험급여가</th><td>123.00원</td>" 또는 "보험급여상한가 : 123원"
-      const patterns = [
-        /보험급여가?[^<]*<\/th>\s*<td[^>]*>([0-9,\.]+)\s*원/i,
-        /보험급여상한가?\s*[:：]\s*([0-9,\.]+)\s*원/i,
-        /급여상한금액[^<]*<\/[^>]+>\s*<[^>]+>([0-9,\.]+)\s*원/i,
-        /상한금액\s*<\/th>\s*<td[^>]*>([0-9,\.]+)/i,
-        /insurancePrice['"]\s*:\s*['"]?([0-9,\.]+)/i,
+      const searchRes = await fetch(searchUrl, {
+        headers: BROWSER_HEADERS,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!searchRes.ok) {
+        console.log('health.kr search failed:', searchRes.status);
+        return null;
+      }
+
+      const searchHtml = await searchRes.text();
+
+      // 검색 결과 목록에서 itemId 추출
+      // 패턴: result_drug_detail.asp?itemId=12345 또는 fnDetailView('12345')
+      const itemIdPatterns = [
+        /result_drug_detail\.asp\?itemId=(\d+)/i,
+        /fnDetailView\s*\(\s*'(\d+)'\s*\)/i,
+        /fnDetailView\s*\(\s*"(\d+)"\s*\)/i,
+        /itemId=(\d+)/i,
+        /drug_detail\.asp[^"']*[?&]itemId=(\d+)/i,
       ];
-      for (const pat of patterns) {
-        const m = html.match(pat);
-        if (m) {
-          const price = parseFloat(m[1].replace(/,/g, ''));
-          if (price > 0) {
-            // 단위 추출 시도
-            const unitMatch = html.match(/보험급여가?[^<]*<\/th>[^<]*<td[^>]*>[^<]*원\s*\/?\s*(정|캡슐|포|병|앰플|개|바이알)/i);
-            return { price, unit: unitMatch ? unitMatch[1] : '정' };
+
+      // 검색 결과 목록에서 품목명과 가장 유사한 항목 찾기
+      // 먼저 모든 itemId 후보 수집
+      const allMatches = [];
+      const globalPattern = /result_drug_detail\.asp\?itemId=(\d+)[^>]*>([^<]*)/gi;
+      let m;
+      while ((m = globalPattern.exec(searchHtml)) !== null) {
+        allMatches.push({ itemId: m[1], name: m[2].trim() });
+      }
+
+      // 품목명 유사도로 정렬
+      let bestItemId = null;
+      if (allMatches.length > 0) {
+        const keyword = itemName.replace(/\s/g, '').replace(/\(.*\)/, '').substring(0, 5);
+        const best = allMatches.find(it =>
+          it.name.replace(/\s/g, '').includes(keyword)
+        ) || allMatches[0];
+        bestItemId = best.itemId;
+      }
+
+      // fallback: 단순 패턴 매칭
+      if (!bestItemId) {
+        for (const pat of itemIdPatterns) {
+          const match = searchHtml.match(pat);
+          if (match) { bestItemId = match[1]; break; }
+        }
+      }
+
+      if (!bestItemId) {
+        console.log('health.kr: itemId not found for', itemName);
+        console.log('html snippet:', searchHtml.substring(0, 500));
+        return null;
+      }
+
+      console.log('health.kr: found itemId', bestItemId, 'for', itemName);
+
+      // ── 2단계: 상세 페이지에서 보험급여가 추출 ───────────────────────────────
+      const detailUrl = `https://www.health.kr/searchDrug/result_drug_detail.asp?itemId=${bestItemId}`;
+      const detailRes = await fetch(detailUrl, {
+        headers: { ...BROWSER_HEADERS, Referer: searchUrl },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!detailRes.ok) {
+        console.log('health.kr detail failed:', detailRes.status);
+        return null;
+      }
+
+      const detailHtml = await detailRes.text();
+
+      // 보험급여가 추출 패턴들 (약학정보원 HTML 구조 기반)
+      // 실제 HTML 예시:
+      //   <th>보험급여가</th><td>408.00원/정</td>
+      //   <td class="bg_blue">보험급여가</td><td>408원</td>
+      //   보험급여가 : 408.00원
+      const pricePatterns = [
+        // th/td 테이블 구조 (가장 일반적)
+        /보험급여가\s*<\/th>\s*<td[^>]*>\s*([\d,\.]+)\s*원\s*(?:\/(정|캡슐|포|병|앰플|바이알|개))?\s*<\/td>/i,
+        // class가 있는 td
+        /보험급여가[^<]*<\/td>\s*<td[^>]*>\s*([\d,\.]+)\s*원\s*(?:\/(정|캡슐|포|병|앰플|바이알|개))?/i,
+        // span/div 구조
+        /보험급여가[^:：]*[:：]\s*([\d,\.]+)\s*원/i,
+        // 숫자만 있는 경우
+        /보험급여가[^>]*>[^<]*<[^>]+>\s*([\d,\.]+)\s*원/i,
+        // 더 넓은 패턴
+        /보험급여[가액].*?([\d,]{3,}\.?\d*)\s*원/i,
+      ];
+
+      for (const pat of pricePatterns) {
+        const match = detailHtml.match(pat);
+        if (match) {
+          const price = parseFloat(match[1].replace(/,/g, ''));
+          if (price > 0 && price < 1000000) { // 합리적 범위 검증
+            const unit = match[2] || '정';
+            console.log(`health.kr price: ${price}원/${unit} for ${itemName}`);
+            return { price, unit, itemId: bestItemId };
           }
         }
       }
+
+      // 패턴 매칭 실패 시 — 디버그용 스니펫 로깅
+      const idx = detailHtml.indexOf('보험급여');
+      if (idx !== -1) {
+        console.log('health.kr: 보험급여 context:', detailHtml.substring(idx, idx + 200));
+      } else {
+        console.log('health.kr: 보험급여 field not found in detail page');
+      }
+
       return null;
+
     } catch (e) {
-      // 타임아웃 or 접근 불가 — 조용히 실패
+      if (e.name === 'TimeoutError') {
+        console.log('health.kr: timeout for', itemName);
+      } else {
+        console.error('health.kr error:', e.message);
+      }
       return null;
     }
   }
@@ -261,31 +227,30 @@ export default async function handler(req, res) {
 
     let mfdsResult = filtered.map(normalize);
 
-    // ── 보험가 병렬 조회 (3가지 소스 동시 시도) ──────────────────────────────
+    // ── 약학정보원에서 보험가 조회 ───────────────────────────────────────────
+    // 같은 약이 여러 품목 있을 때 첫 번째 품목으로 가격 조회 후 나머지는 공유
+    // (같은 검색어 결과 내 동일 약은 가격이 같은 경우가 많음)
     if (mfdsResult.length > 0) {
+      // 중복 요청 방지: 이미 조회한 품목명 캐시
+      const priceCache = new Map();
+
       mfdsResult = await Promise.all(mfdsResult.map(async it => {
         try {
-          // 3가지 소스를 동시 조회 (race 아님 — 우선순위 순)
-          const [hiraResult, mfdsPrice, healthKr] = await Promise.allSettled([
-            callHiraPrice(it.ITEM_NAME),
-            callMfdsPrice(it.ITEM_NAME),
-            callHealthKrPrice(it.ITEM_NAME),
-          ]);
+          // 괄호 제거한 기본 품목명으로 캐시 키 생성
+          const cacheKey = it.ITEM_NAME.replace(/\(.*\)/, '').trim().substring(0, 10);
 
-          const hira    = hiraResult.status  === 'fulfilled' ? hiraResult.value  : null;
-          const mfds    = mfdsPrice.status   === 'fulfilled' ? mfdsPrice.value   : null;
-          const healthK = healthKr.status    === 'fulfilled' ? healthKr.value    : null;
-
-          // 우선순위: HIRA > 식약처가격 > 약학정보원
-          const winner = hira || mfds || healthK;
-
-          console.log(`[${it.ITEM_NAME}] hira=${hira?.price ?? 'null'} mfds=${mfds?.price ?? 'null'} health=${healthK?.price ?? 'null'}`);
+          let result;
+          if (priceCache.has(cacheKey)) {
+            result = priceCache.get(cacheKey);
+          } else {
+            result = await callHealthKrPrice(it.ITEM_NAME);
+            priceCache.set(cacheKey, result);
+          }
 
           return {
             ...it,
-            PRICE:      winner ? winner.price : null,
-            PRICE_UNIT: winner ? (winner.unit || '정') : '정',
-            HIRA_CLASS: (hira?.hiraClass) || it.HIRA_CLASS || it.CLASS_NAME,
+            PRICE:      result ? result.price : null,
+            PRICE_UNIT: result ? (result.unit || '정') : '정',
           };
         } catch(e) {
           console.error('Price fetch error:', it.ITEM_NAME, e.message);
@@ -296,7 +261,7 @@ export default async function handler(req, res) {
 
     if (mfdsResult.length > 0) return res.status(200).json(mfdsResult);
 
-    // ── AI 보완 (식약처 DB 미검색 시) ─────────────────────────────────────
+    // ── AI 낱알식별 보완 (식약처 DB 미검색 시 한정) ──────────────────────────
     if (!AI_KEY) return res.status(200).json([]);
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
