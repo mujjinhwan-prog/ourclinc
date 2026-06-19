@@ -97,7 +97,11 @@ async function fetchDrug(query) {
     shape:parseShape(it.DRUG_SHPE),
     shapeKr:it.DRUG_SHPE||"",
     colorName:it.DRUG_COLO||"",
-    colorCss:parsePillColor(it.DRUG_COLO||""),
+    colorCss:(()=>{
+      const c = parsePillColor(it.DRUG_COLO||"");
+      if (!c && it.DRUG_COLO) console.warn("[색상미매칭]", it.ITEM_NAME, "DRUG_COLO=", JSON.stringify(it.DRUG_COLO));
+      return c;
+    })(),
     colorBack:parsePillColor(it.DRUG_COLO_BACK||""),
     formName:it.FORM_CODE_NAME||"",
     formType:parseFormType(it.FORM_CODE_NAME||"", it.DRUG_SHPE||""),
@@ -118,7 +122,8 @@ async function fetchDrug(query) {
 function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const wPx = Math.round(pill.width  * pxPerMm);
   const hPx = Math.round(pill.height * pxPerMm);
-  const pc   = pill.colorCss  || "#e0e0e0";
+  // colorCss null → 연회색 기본 (검정 fallback 방지)
+  const pc   = pill.colorCss || "#d0d0d0";
   const pcB  = pill.colorBack || pc;
   const pcL  = lighten(pc, 50);
   const pcD  = darken(pc, 30);
