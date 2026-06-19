@@ -21,22 +21,44 @@ function parseFormType(formName, shape) {
   return "tablet";
 }
 
-const COLOR_MAP = {
-  "하양":"#FFFFFF","흰색":"#FFFFFF","백색":"#FFFFFF","흰":"#FFFFFF",
-  "노랑":"#F5C842","노란":"#F5C842","황색":"#E8B84B",
-  "연노랑":"#FFF0A0","주황":"#F47C2F","오렌지":"#F47C2F",
-  "분홍":"#F48FB1","핑크":"#F48FB1","연분홍":"#FBBCD4","살색":"#FFCCAA",
-  "빨강":"#E53935","적색":"#E53935","붉은":"#E53935",
-  "파랑":"#1E88E5","청색":"#1E88E5","파란":"#1E88E5",
-  "연파랑":"#90CAF9","하늘":"#87CEEB","하늘색":"#87CEEB",
-  "초록":"#43A047","녹색":"#43A047","그린":"#43A047",
-  "연두":"#9CCC65","보라":"#8E24AA","자색":"#8E24AA",
-  "연보라":"#CE93D8","갈색":"#8D6E63","회색":"#9E9E9E","회":"#9E9E9E",
-  "검정":"#424242","흑색":"#424242","투명":"rgba(220,220,220,0.3)",
-};
+// COLOR_MAP: 식약처 API 실제 반환값 기준 (긴 키 먼저 → 짧은 키가 잘못 매칭되는 것 방지)
+const COLOR_MAP = [
+  // 흰색 계열
+  ["흰색","#FFFFFF"],["하양","#FFFFFF"],["백색","#FFFFFF"],["흰색(백색)","#FFFFFF"],
+  // 노란색 계열
+  ["연노랑","#FFF0A0"],["연노란","#FFF0A0"],["옅은노랑","#FFF8C0"],
+  ["노랑","#F5C842"],["노란색","#F5C842"],["황색","#E8B84B"],["노란","#F5C842"],
+  // 주황
+  ["주황색","#F47C2F"],["주황","#F47C2F"],["오렌지","#F47C2F"],
+  // 분홍 계열
+  ["연분홍","#FBBCD4"],["연한분홍","#FBBCD4"],["살색","#FFCCAA"],["살구색","#FFCCAA"],
+  ["분홍색","#F48FB1"],["분홍","#F48FB1"],["핑크","#F48FB1"],
+  // 빨강
+  ["빨간색","#E53935"],["빨강","#E53935"],["적색","#E53935"],["붉은","#E53935"],
+  // 파랑 계열
+  ["연파랑","#90CAF9"],["연한파랑","#90CAF9"],["하늘색","#87CEEB"],["하늘","#87CEEB"],
+  ["파란색","#1E88E5"],["파랑","#1E88E5"],["청색","#1E88E5"],["파란","#1E88E5"],["남색","#1565C0"],
+  // 초록 계열
+  ["연두색","#9CCC65"],["연두","#9CCC65"],
+  ["초록색","#43A047"],["초록","#43A047"],["녹색","#43A047"],["그린","#43A047"],
+  // 보라 계열
+  ["연보라","#CE93D8"],["옅은보라","#CE93D8"],
+  ["보라색","#8E24AA"],["보라","#8E24AA"],["자색","#8E24AA"],["자주","#8E24AA"],
+  // 갈색/회색
+  ["갈색","#8D6E63"],["밤색","#8D6E63"],
+  ["회색","#9E9E9E"],["은색","#C0C0C0"],["은","#C0C0C0"],
+  // 검정 (마지막 — 오매칭 방지)
+  ["검정색","#2C2C2C"],["검정","#2C2C2C"],["흑색","#2C2C2C"],["검은색","#2C2C2C"],
+  // 투명
+  ["투명","rgba(200,200,200,0.25)"],
+];
 function parsePillColor(s) {
   if (!s) return null;
-  for (const [k,v] of Object.entries(COLOR_MAP)) if (s.includes(k)) return v;
+  const t = s.trim();
+  // 완전 일치 먼저
+  for (const [k,v] of COLOR_MAP) if (t === k) return v;
+  // 포함 매칭 (긴 키 우선 — 배열 순서로 보장)
+  for (const [k,v] of COLOR_MAP) if (t.includes(k)) return v;
   return null;
 }
 function lighten(hex, amt=40) {
@@ -115,29 +137,31 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const svgW = wPx + RW;
   const svgH = hPx + RH;
 
-  // ── 가로 치수선 (아래) ──
+  // ── 가로 치수선 (약 아래) ──
+  const RY = hPx + 8;   // 가로선 y
   const rulerW = (
     <g>
-      <line x1={0}   y1={hPx+10} x2={wPx} y2={hPx+10} stroke={accentColor} strokeWidth="1.5"/>
-      <line x1={0}   y1={hPx+6}  x2={0}   y2={hPx+14} stroke={accentColor} strokeWidth="1.5"/>
-      <line x1={wPx} y1={hPx+6}  x2={wPx} y2={hPx+14} stroke={accentColor} strokeWidth="1.5"/>
-      <text x={wPx/2} y={hPx+24} textAnchor="middle"
+      <line x1={0}   y1={RY} x2={wPx} y2={RY} stroke={accentColor} strokeWidth="1.5"/>
+      <line x1={0}   y1={RY-4} x2={0}   y2={RY+4} stroke={accentColor} strokeWidth="1.5"/>
+      <line x1={wPx} y1={RY-4} x2={wPx} y2={RY+4} stroke={accentColor} strokeWidth="1.5"/>
+      <text x={wPx/2} y={RY+13} textAnchor="middle"
         fontSize="9" fill={accentColor} fontFamily="monospace" fontWeight="700">{pill.width}mm</text>
     </g>
   );
 
-  // ── 세로 치수선 (오른쪽) ──
-  const RX = wPx + 10;  // 세로선 x 위치
+  // ── 세로 치수선 (약 오른쪽) ──
+  const RX = wPx + 10;   // 세로선 x
+  const midY = hPx / 2;
   const rulerH = (
     <g>
       <line x1={RX} y1={0}   x2={RX} y2={hPx} stroke={accentColor} strokeWidth="1.5"/>
       <line x1={RX-4} y1={0}   x2={RX+4} y2={0}   stroke={accentColor} strokeWidth="1.5"/>
       <line x1={RX-4} y1={hPx} x2={RX+4} y2={hPx} stroke={accentColor} strokeWidth="1.5"/>
       <text
-        x={RX+14} y={hPx/2}
+        x={RX+18} y={midY}
         textAnchor="middle" dominantBaseline="middle"
         fontSize="9" fill={accentColor} fontFamily="monospace" fontWeight="700"
-        transform={`rotate(90,${RX+14},${hPx/2})`}
+        transform={`rotate(-90,${RX+18},${midY})`}
       >{pill.height}mm</text>
     </g>
   );
