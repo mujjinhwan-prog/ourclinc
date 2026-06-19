@@ -86,6 +86,7 @@ async function fetchDrug(query) {
     hiraClass:it.HIRA_CLASS||it.CLASS_NAME||"",
     price:it.PRICE||null,
     priceUnit:it.PRICE_UNIT||"정",
+
   }));
 }
 
@@ -232,24 +233,23 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
           <feDropShadow dx="0" dy="3" stdDeviation={isWhite?"4":"5"}
             floodColor={isWhite?"#aaa":pc} floodOpacity={isWhite?"0.25":"0.45"}/>
         </filter>
-        {/* 분할선 (정제 중앙선) */}
-        {useRect && <clipPath id={`${uid}_clip`}>
+        {/* 클립 경로 — 항상 정의 (광택/텍스트 클리핑용) */}
+        <clipPath id={`${uid}_clip`}>
           {shapePath
             ? <path d={shapePath}/>
             : <rect x="0" y="0" width={wPx} height={hPx} rx={rx} ry={ry}/>
           }
-        </clipPath>}
+        </clipPath>
       </defs>
 
       {/* 약 몸체 */}
       {useRect
         ? <rect x="0" y="0" width={wPx} height={hPx} rx={rx} ry={ry}
             fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"}
-            filter={`url(#${uid}_shadow)`}
-            outline={`3px solid ${accentColor}44`}/>
+            filter={`url(#${uid}_shadow)`}/>
         : <path d={shapePath}
             fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"}
-            filter={`url(#${uid}_shadow)`}/>
+            filter={`url(#${uid}_shadow)`} clipPath={`url(#${uid}_clip)`}/>
       }
 
       {/* 테두리 강조 링 */}
@@ -259,13 +259,10 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
         : null
       }
 
-      {/* 광택 하이라이트 */}
-      {useRect
-        ? <rect x={wPx*0.08} y={hPx*0.07} width={wPx*0.5} height={hPx*0.28}
-            rx={Math.min(wPx,hPx)*0.08} fill={`url(#${uid}_shine)`}
-            clipPath={`url(#${uid}_clip)`} opacity="0.7"/>
-        : null
-      }
+      {/* 광택 하이라이트 — clipPath로 약 경계 안에만 표시 */}
+      <rect x={wPx*0.08} y={hPx*0.07} width={wPx*0.5} height={hPx*0.28}
+        rx={Math.min(wPx,hPx)*0.08} fill={`url(#${uid}_shine)`}
+        clipPath={`url(#${uid}_clip)`} opacity="0.7"/>
 
       {/* 정제 분할선 (두께가 있는 경우 + 장방형/원형) */}
       {(pill.shape === "oblong" || pill.shape === "oval" || pill.shape === "circle") && (
@@ -281,14 +278,7 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
         <text x={wPx*0.38} y={hPx/2+markFontSz*0.38} textAnchor="middle"
           fontSize={markFontSz} fill={textColor} fontWeight="900" fontFamily="monospace" opacity="0.82">{pill.markFront}</text>
       )}
-      {/* 식별문자 없을 때 품목명 약어 */}
-      {!pill.markFront && pill.name && (
-        <text x={wPx/2} y={hPx/2+markFontSz*0.38} textAnchor="middle"
-          fontSize={Math.max(6, markFontSz*0.7)} fill={textColor} fontWeight="700" fontFamily="monospace" opacity="0.45"
-          clipPath={`url(#${uid}_clip)`}>
-          {pill.name.replace(/[^가-힣A-Za-z0-9]/g,'').substring(0,3)}
-        </text>
-      )}
+
 
       {rulerW}{rulerH}
     </svg>
@@ -561,7 +551,9 @@ ${priceStr}
                         {pill.colorName&&<div style={{display:"flex",alignItems:"center",gap:4}}>{pillBg&&<div style={{width:11,height:11,borderRadius:"50%",background:pillBg,border:"1px solid #ccc"}}/>}<span style={{fontSize:FS.xs,color:"#94a3b8"}}>{pill.colorName}</span></div>}
                         {/* 보험가 슬롯 표시 */}
                         {pill.price
-                          ? <div style={{fontSize:FS.xs,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"2px 8px"}}>💊 {Number(pill.price).toLocaleString()}원/{pill.priceUnit||"정"}</div>
+                          ? <div style={{fontSize:FS.xs,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"2px 8px"}}>
+                              💊 {Number(pill.price).toLocaleString()}원/{pill.priceUnit||"정"}
+                            </div>
                           : <div style={{fontSize:FS.xs,color:"#94a3b8"}}>보험가 미등재</div>
                         }
                       </>
