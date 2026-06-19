@@ -74,8 +74,11 @@ export default async function handler(req, res) {
       const text = await r.text();
       const data = JSON.parse(text);
       if (!Array.isArray(data) || data.length === 0) return null;
-      console.log(`healthKr detail ${drugCd}:`, JSON.stringify(data[0]).substring(0, 300));
-      return data[0]; // 첫 번째 항목
+      // 전체 필드명 로그 (어떤 키가 오는지 파악용)
+      const item = data[0];
+      console.log(`healthKr detail ${drugCd} keys:`, Object.keys(item).join(', '));
+      console.log(`healthKr detail ${drugCd} data:`, JSON.stringify(item).substring(0, 500));
+      return item;
     } catch (e) {
       console.error('healthKr detail error:', e.message);
       return null;
@@ -142,8 +145,8 @@ export default async function handler(req, res) {
       ITEM_SEQ:       it.ITEM_SEQ        || '',
       ITEM_NAME:      it.ITEM_NAME       || '',
       DRUG_SHPE:      it.DRUG_SHAPE      || it.DRUG_SHPE || '',
-      DRUG_COLO:      it.COLOR_CLASS1    || it.DRUG_COLO_FRONT || it.DRUG_COLO || '',
-      DRUG_COLO_BACK: it.COLOR_CLASS2    || it.DRUG_COLO_BACK  || '',
+      DRUG_COLO:      it.DRUG_COLO       || it.DRUG_COLO_FRONT || it.COLOR_CLASS1 || '',
+      DRUG_COLO_BACK: it.DRUG_COLO_BACK  || it.COLOR_CLASS2    || '',
       PRINT_FRONT:    it.MARK_CODE_FRONT || it.PRINT_FRONT     || '',
       PRINT_BACK:     it.MARK_CODE_BACK  || it.PRINT_BACK      || '',
       FORM_CODE_NAME: it.FORM_CODE_NAME  || '',
