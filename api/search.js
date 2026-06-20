@@ -9,6 +9,7 @@ export default async function handler(req, res) {
   if (!query) return res.status(400).json({ error: 'query is required' });
 
   const MFDS_KEY = process.env.MFDS_API_KEY;
+  const HIRA_KEY = process.env.HIRA_API_KEY;
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
@@ -30,108 +31,55 @@ export default async function handler(req, res) {
     return [];
   }
 
-  // ── 약학정보원(KPIC) 검색: GET + 정확한 Referer/헤더 조합 ───────────────────
-  // 검증된 방식 (커뮤니티 MCP 서버 구현 참고)
-  async function kpicSearch(drugName) {
+  // ── HIRA 약가기준정보조회서비스: 품목명으로 상한금액(mxCprc) 조회 ───────────
+  // https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList
+  async function callHiraPrice(itemName) {
+    if (!HIRA_KEY) return null;
     try {
-      const word = drugName.replace(/\(.*?\)/g, '').trim().substring(0, 10);
-      const now = Date.now();
-      const url = `https://www.health.kr/searchDrug/ajax/ajax_commonSearch.asp?search_word=${encodeURIComponent(word)}&search_flag=all&_=${now}`;
-      const r = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'accept': 'application/json, text/javascript, */*; q=0.01',
-          'accept-language': 'ko,en-US;q=0.9,en;q=0.8',
-          'x-requested-with': 'XMLHttpRequest',
-          'cache-control': 'no-cache',
-          'pragma': 'no-cache',
-          'Referer': 'https://www.health.kr/searchDrug/search_total_result.asp',
-        },
-        signal: AbortSignal.timeout(8000),
+      // 괄호 안 성분명 제거 + 공백 제거한 핵심 약품명으로 검색
+      const word = itemName.replace(/\(.*?\)/g, '').trim();
+      const params = new URLSearchParams({
+        serviceKey: HIRA_KEY,
+        itmNm: word,
+        numOfRows: '10',
+        pageNo: '1',
+        type: 'json',
       });
-      if (!r.ok) { console.log('kpicSearch failed:', r.status); return []; }
+      const url = 'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params;
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) { console.log('HIRA price fetch failed:', r.status); return null; }
+
       const text = await r.text();
       let data;
-      try { data = JSON.parse(text); } catch { console.log('kpicSearch parse fail:', text.substring(0,200)); return []; }
-      if (!Array.isArray(data)) { console.log('kpicSearch non-array:', JSON.stringify(data).substring(0,200)); return []; }
-      console.log(`kpicSearch "${word}": ${data.length}건`);
-      return data;
-    } catch (e) {
-      console.error('kpicSearch error:', e.message);
-      return [];
-    }
-  }
-
-  // ── 약학정보원(KPIC) 상세 조회: GET + drug_cd 기반 Referer ──────────────────
-  async function kpicDetail(drugCd) {
-    try {
-      const now = Date.now();
-      const url = `https://www.health.kr/searchDrug/ajax/ajax_result_drug2.asp?drug_cd=${encodeURIComponent(drugCd)}&_=${now}`;
-      const r = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'accept': 'application/json, text/javascript, */*; q=0.01',
-          'accept-language': 'ko,en-US;q=0.9,en;q=0.8',
-          'x-requested-with': 'XMLHttpRequest',
-          'cache-control': 'no-cache',
-          'pragma': 'no-cache',
-          'Referer': `https://www.health.kr/searchDrug/result_drug.asp?drug_cd=${encodeURIComponent(drugCd)}`,
-        },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!r.ok) { console.log('kpicDetail failed:', r.status); return null; }
-      const text = await r.text();
-      let data;
-      try { data = JSON.parse(text); } catch { console.log('kpicDetail parse fail:', text.substring(0,300)); return null; }
-      if (!Array.isArray(data) || data.length === 0) { console.log('kpicDetail empty'); return null; }
-      const item = data[0];
-      console.log(`kpicDetail ${drugCd} keys:`, Object.keys(item).join(', '));
-      return item;
-    } catch (e) {
-      console.error('kpicDetail error:', e.message);
-      return null;
-    }
-  }
-
-  // ── 약학정보원 보험가 조회 (검색 → best 매칭 → 상세) ───────────────────────
-  async function callHealthKrPrice(itemName) {
-    try {
-      const searchResults = await kpicSearch(itemName);
-      if (!searchResults.length) return null;
-
-      const keyword = itemName.replace(/\s|\(.*?\)/g, '').substring(0, 6);
-      const best = searchResults.find(d =>
-        (d.drug_name || d.item_name || '').replace(/\s/g, '').includes(keyword)
-      ) || searchResults[0];
-
-      const drugCd = best.drug_cd || best.drugcd || best.code;
-      if (!drugCd) { console.log('no drug_cd in search result:', JSON.stringify(best).substring(0,200)); return null; }
-
-      const detail = await kpicDetail(drugCd);
-      if (!detail) return null;
-
-      const priceRaw =
-        detail.ins_price           ??
-        detail.insurance_price     ??
-        detail.insr_price          ??
-        detail.reimbursement_price ??
-        detail.price               ??
-        null;
-
-      const unit = detail.ins_unit || detail.unit || detail.pack_unit || '정';
-
-      if (priceRaw === null || priceRaw === undefined || priceRaw === '') {
-        console.log('no price field, detail dump:', JSON.stringify(detail).substring(0,400));
+      try { data = JSON.parse(text); } catch {
+        console.log('HIRA price parse fail (XML?):', text.substring(0,300));
         return null;
       }
 
+      const header = data?.header;
+      if (header && header.resultCode && header.resultCode !== '00') {
+        console.log('HIRA price API error:', header.resultCode, header.resultMsg);
+        return null;
+      }
+
+      let items = data?.body?.item?.item || data?.body?.items?.item;
+      if (!items) { console.log('HIRA price no items for:', word); return null; }
+      if (!Array.isArray(items)) items = [items];
+      if (items.length === 0) return null;
+
+      // 가장 이름이 비슷한 항목 우선 (완전 포함 매칭)
+      const keyword = word.replace(/\s/g, '');
+      const best = items.find(it => (it.itmNm || '').replace(/\s/g, '').includes(keyword)) || items[0];
+
+      const priceRaw = best.mxCprc;
+      if (priceRaw === undefined || priceRaw === null || priceRaw === '') return null;
       const price = parseFloat(String(priceRaw).replace(/,/g, ''));
       if (isNaN(price) || price <= 0) return null;
 
-      console.log(`KPIC price "${itemName}": ${price}원/${unit} (drug_cd:${drugCd})`);
-      return { price, unit };
+      console.log(`HIRA price "${itemName}" → ${best.itmNm}: ${price}원/${best.unit || '정'}`);
+      return { price, unit: best.unit || '정' };
     } catch (e) {
-      console.error('callHealthKrPrice error:', e.message);
+      console.error('callHiraPrice error:', e.message);
       return null;
     }
   }
@@ -191,17 +139,17 @@ export default async function handler(req, res) {
 
     let mfdsResult = filtered.map(normalize);
 
-    // ── 약학정보원 보험가 조회 (중복 캐시) ────────────────────────────────────
-    if (mfdsResult.length > 0) {
+    // ── HIRA 보험가(상한금액) 조회 (동일 약품명 중복 캐시) ─────────────────────
+    if (mfdsResult.length > 0 && HIRA_KEY) {
       const priceCache = new Map();
       mfdsResult = await Promise.all(mfdsResult.map(async it => {
         try {
-          const cacheKey = it.ITEM_NAME.replace(/\(.*?\)/g,'').trim().substring(0, 8);
+          const cacheKey = it.ITEM_NAME;
           let result;
           if (priceCache.has(cacheKey)) {
             result = priceCache.get(cacheKey);
           } else {
-            result = await callHealthKrPrice(it.ITEM_NAME);
+            result = await callHiraPrice(it.ITEM_NAME);
             priceCache.set(cacheKey, result);
           }
           return {
