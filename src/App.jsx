@@ -150,18 +150,13 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const wTextPx = wLabelLen * 13 * 0.62 + 8;
   const drawW = Math.max(wPx, wTextPx);
   const X0 = (drawW - wPx) / 2;
+  const Y0 = 0;   // 세로 치수선이 가로 텍스트로 바뀌어 더 이상 세로 보정 불필요
 
-  // 세로 텍스트(hLabel, -90도 회전)가 약 높이(hPx)보다 길면 위아래로 삐져나오므로
-  // 그만큼 캔버스 높이를 키우고 약 몸체를 세로 중앙(Y0)에 배치
-  const hTextPx = hLabelLen * 13 * 0.62 + 8;
-  const drawH = Math.max(hPx, hTextPx);
-  const Y0 = (drawH - hPx) / 2;
-
-  const RW = 30 + hLabelLen * 8;   // 오른쪽 세로치수선 폭 (텍스트 길이 비례)
+  const RW = 16 + hLabelLen * 9;   // 오른쪽 세로치수선 폭 — 가로로 눕힌 텍스트 길이만큼
   const RH = 36;                    // 아래쪽 가로치수선 높이
 
   const svgW = drawW + RW;
-  const svgH = drawH + RH;
+  const svgH = hPx + RH;
 
   // ── 가로 치수선 (약 아래) ──
   const RY = Y0 + hPx + 8;
@@ -175,7 +170,8 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
     </g>
   );
 
-  // ── 세로 치수선 (약 오른쪽) ──
+  // ── 세로 치수선 (약 오른쪽) — 회전 텍스트는 작은 크기에서 렌더링이 깨지므로
+  // 가로 텍스트로 눕혀서 표시 (가독성·렌더 안정성 우선)
   const RX = X0 + wPx + 10;
   const midY = Y0 + hPx / 2;
   const rulerH = (
@@ -184,10 +180,9 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
       <line x1={RX-4} y1={Y0}   x2={RX+4} y2={Y0}   stroke={accentColor} strokeWidth="1.5"/>
       <line x1={RX-4} y1={Y0+hPx} x2={RX+4} y2={Y0+hPx} stroke={accentColor} strokeWidth="1.5"/>
       <text
-        x={RX+16} y={midY}
-        textAnchor="middle" dominantBaseline="middle"
+        x={RX+8} y={midY}
+        textAnchor="start" dominantBaseline="middle"
         fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700"
-        transform={`rotate(-90,${RX+16},${midY})`}
       >{hLabel}</text>
     </g>
   );
