@@ -439,14 +439,14 @@ export default function App() {
 <div style="position:absolute;left:${rp}px;top:0;height:${hPx}px;display:flex;align-items:center;gap:3px;">
 <div style="width:2px;height:100%;background:${color}bb;position:relative;"><div style="position:absolute;left:-4px;top:0;width:10px;height:2px;background:${color}bb;"></div><div style="position:absolute;left:-4px;bottom:0;width:10px;height:2px;background:${color}bb;"></div></div>
 <span style="font-family:monospace;font-size:8pt;color:${color};font-weight:700;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;">${pill.height}mm</span></div></div>
-<div style="width:${wPx}px;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="width:100%;height:2px;background:${color}bb;position:relative;"><div style="position:absolute;left:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div><div style="position:absolute;right:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div></div><span style="font-family:monospace;font-size:9pt;color:${color};font-weight:700;">${pill.width}mm</span></div>
+<div style="width:${wPx}px;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="width:100%;height:2px;background:${color}bb;position:relative;"><div style="position:absolute;left:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div><div style="position:absolute;right:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div></div><span style="font-family:monospace;font-size:8pt;color:${color};font-weight:700;">${pill.width}mm</span></div>
 <div style="display:flex;align-items:center;gap:4px;font-size:8pt;color:#888;margin:2px 0;"><div style="width:${oneCmPx}px;height:2px;background:#bbb;position:relative;-webkit-print-color-adjust:exact;"><div style="position:absolute;left:0;top:-3px;width:2px;height:8px;background:#bbb;"></div><div style="position:absolute;right:0;top:-3px;width:2px;height:8px;background:#bbb;"></div></div><span>1cm</span></div>
 <div style="font-size:8pt;color:#444;text-align:center;line-height:1.8;width:100%;">
 ${pill.etcOtc?`<span style="-webkit-print-color-adjust:exact;font-weight:700;color:${pill.etcOtc.includes("전문")?"#dc2626":"#16a34a"}">${pill.etcOtc.includes("전문")?"전문의약품":"일반의약품"}</span><br>`:""}
-${pill.formName?`<span style="color:#3b5bdb;">${pill.formName}</span><br>`:""}
-${pill.colorName||""}${pill.shapeKr?" / "+pill.shapeKr:""}<br>
-<b style="color:${color};-webkit-print-color-adjust:exact;">${pill.width}×${pill.height}${pill.thickness?"×"+pill.thickness:""}mm</b><br>
-${pill.hiraClass?`<span style="color:#64748b;">${pill.hiraClass}</span><br>`:""}
+<b style="color:${color};-webkit-print-color-adjust:exact;">Width: ${pill.width}mm</b><br>
+<b style="color:${color};-webkit-print-color-adjust:exact;">Height: ${pill.height}mm</b><br>
+${pill.thickness?`<b style="color:${color};-webkit-print-color-adjust:exact;">Thickness: ${pill.thickness}mm</b><br>`:""}
+${pill.entpName?`<span style="color:#64748b;">${pill.entpName}</span><br>`:""}
 ${priceStr}
 </div></div>`;
     };
@@ -473,7 +473,7 @@ ${priceStr}
   const tableRows=[
     {label:"구분",render:(p)=>p.etcOtc?<span style={{background:p.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",color:p.etcOtc.includes("전문")?"#dc2626":"#16a34a",padding:"3px 12px",borderRadius:50,fontWeight:700,fontSize:FS.base,whiteSpace:"nowrap"}}>{p.etcOtc.includes("전문")?"전문의약품":"일반의약품"}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
     {label:"제형",render:(p)=>p.formName?<span style={{background:"#eff6ff",color:"#3b5bdb",padding:"3px 12px",borderRadius:50,fontSize:FS.base,fontWeight:600}}>{p.formName}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
-    {label:"색상·모양",render:(p)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{p.colorCss&&<div style={{width:14,height:14,borderRadius:"50%",background:p.colorCss,border:"1px solid #ddd",flexShrink:0}}/>}<span style={{fontSize:FS.base,color:"#1a1f36"}}>{p.colorName||"-"}{p.shapeKr?" / "+p.shapeKr:""}</span></div>)},
+    {label:"제조사/판매사",render:(p)=>(<span style={{fontSize:FS.base,color:"#1a1f36"}}>{p.entpName||"-"}</span>)},
     {label:"크기",render:(p,idx)=>(<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:ACCENT[idx],whiteSpace:"nowrap"}}>{p.width}×{p.height}{p.thickness?"×"+p.thickness:""}mm</span>)},
     {label:"효능군",render:(p)=>p.hiraClass?<span style={{fontSize:FS.base,color:"#64748b",background:"#f1f5f9",padding:"3px 10px",borderRadius:50,whiteSpace:"nowrap"}}>{p.hiraClass}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
     {label:"보험가",render:(p)=>p.price
