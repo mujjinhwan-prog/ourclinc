@@ -31,43 +31,50 @@ export default async function handler(req, res) {
     return [];
   }
 
+  // 간단한 XML → 객체 배열 파서 (<item>...</item> 반복 구조 전용)
+  // HIRA API가 type=json을 줘도 XML로만 응답하므로 직접 파싱
+  function parseHiraXmlItems(xml) {
+    const items = [];
+    const itemBlocks = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+    for (const block of itemBlocks) {
+      const obj = {};
+      const fieldMatches = block.matchAll(/<(\w+)>([\s\S]*?)<\/\1>/g);
+      for (const m of fieldMatches) obj[m[1]] = m[2].trim();
+      if (Object.keys(obj).length > 0) items.push(obj);
+    }
+    return items;
+  }
+  function getXmlTag(xml, tag) {
+    const m = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
+    return m ? m[1].trim() : null;
+  }
+
   // ── HIRA 약가기준정보조회서비스: 품목명으로 상한금액(mxCprc) 조회 ───────────
-  // https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList
+  // https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList (응답 XML 고정)
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
-      // 괄호 안 성분명 제거 + 공백 제거한 핵심 약품명으로 검색
       const word = itemName.replace(/\(.*?\)/g, '').trim();
       const params = new URLSearchParams({
         serviceKey: HIRA_KEY,
         itmNm: word,
         numOfRows: '10',
         pageNo: '1',
-        type: 'json',
       });
       const url = 'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params;
       const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!r.ok) { console.log('HIRA price fetch failed:', r.status); return null; }
 
-      const text = await r.text();
-      let data;
-      try { data = JSON.parse(text); } catch {
-        console.log('HIRA price parse fail (XML?):', text.substring(0,300));
+      const xml = await r.text();
+      const resultCode = getXmlTag(xml, 'resultCode');
+      if (resultCode && resultCode !== '00') {
+        console.log('HIRA price API error:', resultCode, getXmlTag(xml, 'resultMsg'));
         return null;
       }
 
-      const header = data?.header;
-      if (header && header.resultCode && header.resultCode !== '00') {
-        console.log('HIRA price API error:', header.resultCode, header.resultMsg);
-        return null;
-      }
+      const items = parseHiraXmlItems(xml);
+      if (items.length === 0) { console.log('HIRA price no items for:', word); return null; }
 
-      let items = data?.body?.item?.item || data?.body?.items?.item;
-      if (!items) { console.log('HIRA price no items for:', word); return null; }
-      if (!Array.isArray(items)) items = [items];
-      if (items.length === 0) return null;
-
-      // 가장 이름이 비슷한 항목 우선 (완전 포함 매칭)
       const keyword = word.replace(/\s/g, '');
       const best = items.find(it => (it.itmNm || '').replace(/\s/g, '').includes(keyword)) || items[0];
 
@@ -76,7 +83,7 @@ export default async function handler(req, res) {
       const price = parseFloat(String(priceRaw).replace(/,/g, ''));
       if (isNaN(price) || price <= 0) return null;
 
-      console.log(`HIRA price "${itemName}" → ${best.itmNm}: ${price}원/${best.unit || '정'}`);
+      console.log(`HIRA price "${itemName}" -> ${best.itmNm}: ${price} ${best.unit || '정'}`);
       return { price, unit: best.unit || '정' };
     } catch (e) {
       console.error('callHiraPrice error:', e.message);
