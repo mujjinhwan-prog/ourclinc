@@ -1,40 +1,38 @@
-// search.js의 kpicSearch/kpicDetail을 그대로 가져와서 단계별로 테스트
+// HIRA 약가기준정보조회서비스 실제 응답 확인
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const result = {};
+  const HIRA_KEY = process.env.HIRA_API_KEY;
 
-  const word = '자디앙';
+  result.hira_key_exists = !!HIRA_KEY;
+  result.hira_key_length = HIRA_KEY ? HIRA_KEY.length : 0;
 
-  // 1단계: kpicSearch 그대로 재현
   try {
-    const now = Date.now();
-    const url = `https://www.health.kr/searchDrug/ajax/ajax_commonSearch.asp?search_word=${encodeURIComponent(word)}&search_flag=all&_=${now}`;
-    const r = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'accept': 'application/json, text/javascript, */*; q=0.01',
-        'accept-language': 'ko,en-US;q=0.9,en;q=0.8',
-        'x-requested-with': 'XMLHttpRequest',
-        'cache-control': 'no-cache',
-        'pragma': 'no-cache',
-        'Referer': 'https://www.health.kr/searchDrug/search_total_result.asp',
-      },
+    const params = new URLSearchParams({
+      serviceKey: HIRA_KEY,
+      itmNm: '자디앙',
+      numOfRows: '10',
+      pageNo: '1',
+      type: 'json',
     });
-    result.search_url = url;
-    result.search_status = r.status;
-    result.search_headers = Object.fromEntries(r.headers.entries());
+    const url = 'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params;
+    result.request_url = url.replace(HIRA_KEY, 'HIDDEN_KEY');
+
+    const r = await fetch(url);
+    result.status = r.status;
+    result.content_type = r.headers.get('content-type');
+
     const text = await r.text();
-    result.search_raw_text = text.substring(0, 1500);
+    result.raw_text = text.substring(0, 2000);
+
     try {
       const data = JSON.parse(text);
-      result.search_parsed_type = Array.isArray(data) ? 'array' : typeof data;
-      result.search_parsed_length = Array.isArray(data) ? data.length : null;
-      result.search_first_item = Array.isArray(data) && data.length > 0 ? data[0] : null;
+      result.parsed = data;
     } catch(e) {
-      result.search_parse_error = e.message;
+      result.parse_error = e.message;
     }
   } catch(e) {
-    result.search_fetch_error = e.message;
+    result.fetch_error = e.message;
   }
 
   res.status(200).json(result);
