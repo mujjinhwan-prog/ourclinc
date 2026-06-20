@@ -243,7 +243,13 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   if (pill.shape === "circle") {
     rx = wPx/2; ry = hPx/2;
   } else if (pill.shape === "oval" || pill.shape === "oblong") {
-    rx = Math.min(wPx,hPx)*0.45; ry = Math.min(wPx,hPx)*0.45;
+    // 실제 알약은 "타원"보다 위아래 변이 평평하고 양끝만 둥근 스타디움(캡슐) 형태에 가까움.
+    // ry를 짧은 변의 정확히 절반으로 고정해 양끝을 완전한 반원으로 마감.
+    // 식약처 분류명(oval/oblong)이 아니라 실제 가로세로 비율로 캡슐 정도를 판단:
+    // 길쭉할수록(긴변/짧은변이 클수록) 옆면 직선 구간을 넓혀 또렷한 캡슐 윤곽을 만듦.
+    ry = hPx/2;
+    const aspect = wPx/hPx;
+    rx = aspect >= 1.6 ? Math.min(wPx*0.18, ry) : ry;
   } else if (pill.shape === "rectangle") {
     rx = 4; ry = 4;
   } else if (pill.shape === "halfcircle") {
