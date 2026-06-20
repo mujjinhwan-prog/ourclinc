@@ -584,12 +584,14 @@ export default function App() {
                           <span>1cm</span>
                         </div>
                         {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>제조/판매: {pill.entpName}</div>}
-                        {/* 보험가 슬롯 표시 — 가독성을 위해 기존 대비 2배 크기 */}
+                        {/* spacer: 약 이름·제조사 줄 수가 달라도 보험가는 항상 카드 맨 아래로 고정 */}
+                        <div style={{flex:1}}/>
+                        {/* 보험가 슬롯 표시 — 가독성을 위해 기존 대비 2배 크기, 모든 카드 동일 높이로 하단 정렬 */}
                         {pill.price
-                          ? <div style={{fontSize:FS.xs*2,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"3px 10px"}}>
+                          ? <div style={{fontSize:FS.xs*2,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"3px 10px",flexShrink:0}}>
                               💊 {Number(pill.price).toLocaleString()}원/{pill.priceUnit||"정"}
                             </div>
-                          : <div style={{fontSize:FS.xs*2,color:"#94a3b8"}}>보험가 미등재</div>
+                          : <div style={{fontSize:FS.xs*2,color:"#94a3b8",flexShrink:0}}>보험가 미등재</div>
                         }
                       </>
                     ):(
