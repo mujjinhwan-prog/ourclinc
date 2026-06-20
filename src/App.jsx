@@ -97,11 +97,7 @@ async function fetchDrug(query) {
     shape:parseShape(it.DRUG_SHPE),
     shapeKr:it.DRUG_SHPE||"",
     colorName:it.DRUG_COLO||"",
-    colorCss:(()=>{
-      const c = parsePillColor(it.DRUG_COLO||"");
-      if (!c && it.DRUG_COLO) console.warn("[색상미매칭]", it.ITEM_NAME, "DRUG_COLO=", JSON.stringify(it.DRUG_COLO));
-      return c;
-    })(),
+    colorCss:parsePillColor(it.DRUG_COLO||""),
     colorBack:parsePillColor(it.DRUG_COLO_BACK||""),
     formName:it.FORM_CODE_NAME||"",
     formType:parseFormType(it.FORM_CODE_NAME||"", it.DRUG_SHPE||""),
