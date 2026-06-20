@@ -101,6 +101,7 @@ async function fetchDrug(query) {
   return raw.filter(it => it.LNGS_STDR && it.SHRT_STDR).map((it,i) => ({
     id:(it.ITEM_NAME||"p")+"_"+i,
     name:it.ITEM_NAME||"",
+    entpName:it.ENTP_NAME||"",
     width:parseFloat(it.LNGS_STDR)||0,
     height:parseFloat(it.SHRT_STDR)||0,
     thickness:it.THICK?parseFloat(it.THICK):null,
@@ -347,6 +348,7 @@ export default function App() {
   const [pxPerMm,setPxPerMm]       = useState(3.7795);
   const [dpiInfo,setDpiInfo]       = useState("DPI 측정 중...");
   const [ppiInput,setPpiInput]     = useState("");
+  const [printScale,setPrintScale] = useState("1.5");   // 인쇄 배율 (사용자 입력, 기본 1.5배)
   const debRef=useRef(null), inRef=useRef(null), dropRef=useRef(null);
 
   // ── 폰트 스케일: 기존 대비 1.5배 ──
@@ -404,7 +406,7 @@ export default function App() {
 
   // ── 인쇄 ──
   const handlePrint=()=>{
-    const SCALE=1.5;
+    const SCALE=Math.max(0.1,Math.min(5,parseFloat(printScale)||1.5));
     const ppm=11.811*SCALE;
     const today=new Date().toLocaleDateString("ko-KR");
     const pillHtml=(pill,idx)=>{
@@ -451,7 +453,7 @@ ${priceStr}
     const row1=slots.slice(0,4).map((p,i)=>pillHtml(p,i)).join("");
     const row2=slots.slice(4,8).map((p,i)=>pillHtml(p,i+4)).join("");
     const vsDivider=`<div style="display:flex;align-items:center;justify-content:center;margin:8px 0;-webkit-print-color-adjust:exact;"><div style="flex:1;height:3px;background:linear-gradient(90deg,#fff,#3b5bdb,#7048e8);border-radius:99px;margin-right:10px;-webkit-print-color-adjust:exact;"></div><div style="position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="120" height="52" viewBox="0 0 120 52" xmlns="http://www.w3.org/2000/svg" style="-webkit-print-color-adjust:exact;"><defs><radialGradient id="bg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#7048e8"/><stop offset="100%" stop-color="#3b5bdb"/></radialGradient></defs><rect x="8" y="10" width="104" height="32" rx="6" fill="url(#bg1)"/><rect x="8" y="10" width="104" height="32" rx="6" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.6"/><text x="18" y="31" font-family="Arial" font-size="16" fill="#FFD700" opacity="0.9">⚡</text><text x="60" y="33" font-family="Arial Black,Impact,sans-serif" font-size="18" font-weight="900" fill="white" text-anchor="middle" letter-spacing="2">VS</text><text x="88" y="31" font-family="Arial" font-size="16" fill="#FFD700" opacity="0.9">⚡</text></svg><div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#FFD700;color:#1a1f36;font-size:7pt;font-weight:900;padding:2px 8px;border-radius:99px;white-space:nowrap;-webkit-print-color-adjust:exact;">💊 약제 크기 비교 💊</div></div><div style="flex:1;height:3px;background:linear-gradient(90deg,#7048e8,#3b5bdb,#fff);border-radius:99px;margin-left:10px;-webkit-print-color-adjust:exact;"></div></div>`;
-    const html=`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>약품 크기 비교표</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:white;font-size:10.5pt;}@page{size:A4 landscape;margin:7mm}.header{display:flex;align-items:center;gap:10px;border-bottom:2.5px solid #3b5bdb;padding-bottom:5px;margin-bottom:7px;-webkit-print-color-adjust:exact;}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}.notice{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:8px;padding:6px 12px;background:#fffbeb;border:1.5px solid #FFD700;border-radius:8px;-webkit-print-color-adjust:exact;}.footer{margin-top:6px;font-size:7.5pt;color:#94a3b8;border-top:1px solid #eee;padding-top:4px;text-align:center;}</style></head><body><div class="header"><img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" style="height:36px;width:auto;" alt="logo" onerror="this.style.display='none'"/><div><div style="font-size:15pt;font-weight:700;color:#1a1f36;">약품 실제 크기 비교표</div><div style="font-size:9pt;color:#64748b;">식약처 공식 낱알식별 데이터 · Voice of YUHAN · made by mujjinhwan</div></div><div style="margin-left:auto;font-size:9pt;color:#94a3b8;">인쇄일: ${today}</div></div><div class="grid">${row1}</div>${vsDivider}<div class="grid" style="margin-top:8px;">${row2}</div><div class="notice"><span style="font-size:18pt;">⚠️</span><div><div style="font-size:10.5pt;font-weight:900;color:#d97706;-webkit-print-color-adjust:exact;">실제 크기의 1.5배로 출력되었습니다</div><div style="font-size:9pt;color:#92400e;">실제 약품 크기 = 인쇄된 크기 ÷ 1.5로 계산하세요.</div></div></div><div class="footer">※ 본 출력물의 약제 형상은 실제 약품 크기(mm) 기준을 1.5배 확대하여 인쇄한 것입니다. 보험가는 HIRA 급여기준 또는 식약처 공시가 기준입니다.</div></body></html>`;
+    const html=`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>약품 크기 비교표</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:white;font-size:10.5pt;}@page{size:A4 landscape;margin:7mm}.header{display:flex;align-items:center;gap:10px;border-bottom:2.5px solid #3b5bdb;padding-bottom:5px;margin-bottom:7px;-webkit-print-color-adjust:exact;}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}.notice{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:8px;padding:6px 12px;background:#fffbeb;border:1.5px solid #FFD700;border-radius:8px;-webkit-print-color-adjust:exact;}.footer{margin-top:6px;font-size:7.5pt;color:#94a3b8;border-top:1px solid #eee;padding-top:4px;text-align:center;}</style></head><body><div class="header"><img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" style="height:36px;width:auto;" alt="logo" onerror="this.style.display='none'"/><div><div style="font-size:15pt;font-weight:700;color:#1a1f36;">약품 실제 크기 비교표</div><div style="font-size:9pt;color:#64748b;">식약처 공식 낱알식별 데이터 · Voice of YUHAN · made by mujjinhwan</div></div><div style="margin-left:auto;font-size:9pt;color:#94a3b8;">인쇄일: ${today}</div></div><div class="grid">${row1}</div>${vsDivider}<div class="grid" style="margin-top:8px;">${row2}</div><div class="notice"><span style="font-size:18pt;">⚠️</span><div><div style="font-size:10.5pt;font-weight:900;color:#d97706;-webkit-print-color-adjust:exact;">실제 크기의 ${SCALE}배로 출력되었습니다</div><div style="font-size:9pt;color:#92400e;">실제 약품 크기 = 인쇄된 크기 ÷ ${SCALE}로 계산하세요.</div></div></div><div class="footer">※ 본 출력물의 약제 형상은 실제 약품 크기(mm) 기준을 ${SCALE}배로 인쇄한 것입니다. 보험가는 HIRA 급여기준 또는 식약처 공시가 기준입니다.</div></body></html>`;
     const iframe=document.createElement("iframe");
     iframe.style.cssText="position:fixed;top:-9999px;left:-9999px;width:297mm;height:210mm;border:none;";
     document.body.appendChild(iframe);
@@ -564,6 +566,11 @@ ${priceStr}
               <button onClick={applyPPI} style={{padding:"3px 10px",background:"#3b5bdb",border:"none",borderRadius:5,color:"white",fontSize:FS.sm,cursor:"pointer",fontFamily:"inherit"}}>적용</button>
               <span style={{fontSize:FS.sm,color:"#6366f1"}}>아이폰15:460 / 갤S24:416</span>
             </div>
+            <div style={{display:"flex",alignItems:"center",gap:7,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"6px 14px",fontSize:FS.base,color:"#92400e"}}>
+              🖨️ 인쇄 배율:
+              <input type="number" value={printScale} onChange={e=>setPrintScale(e.target.value)} placeholder="1.5" min="0.1" max="5" step="0.1" style={{width:62,padding:"3px 8px",border:"1px solid #fde68a",borderRadius:5,fontSize:FS.base,color:"#1a1f36",background:"white",outline:"none"}}/>
+              <span style={{fontSize:FS.sm,color:"#d97706"}}>배 (예: 0.2, 1, 2)</span>
+            </div>
           </div>
         </div>
 
@@ -597,13 +604,13 @@ ${priceStr}
                           </div>
                           <span>1cm</span>
                         </div>
-                        {pill.colorName&&<div style={{display:"flex",alignItems:"center",gap:4}}>{pillBg&&<div style={{width:11,height:11,borderRadius:"50%",background:pillBg,border:"1px solid #ccc"}}/>}<span style={{fontSize:FS.xs,color:"#94a3b8"}}>{pill.colorName}</span></div>}
-                        {/* 보험가 슬롯 표시 */}
+                        {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>{pill.entpName}</div>}
+                        {/* 보험가 슬롯 표시 — 가독성을 위해 기존 대비 2배 크기 */}
                         {pill.price
-                          ? <div style={{fontSize:FS.xs,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"2px 8px"}}>
+                          ? <div style={{fontSize:FS.xs*2,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"3px 10px"}}>
                               💊 {Number(pill.price).toLocaleString()}원/{pill.priceUnit||"정"}
                             </div>
-                          : <div style={{fontSize:FS.xs,color:"#94a3b8"}}>보험가 미등재</div>
+                          : <div style={{fontSize:FS.xs*2,color:"#94a3b8"}}>보험가 미등재</div>
                         }
                       </>
                     ):(
