@@ -35,10 +35,13 @@ export default async function handler(req, res) {
   // HIRA API가 type=json을 줘도 XML로만 응답하므로 직접 파싱
   function parseHiraXmlItems(xml) {
     const items = [];
-    const itemBlocks = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
-    for (const block of itemBlocks) {
+    const itemBlocks = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
+    for (const blockFull of itemBlocks) {
+      // <item> 바깥 태그 자체를 제거하고 내부 필드 태그만 남겨서 파싱
+      // (제거 안 하면 정규식이 <item>...</item> 전체를 하나의 필드로 잘못 매칭함)
+      const inner = blockFull.replace(/^<item>/, '').replace(/<\/item>$/, '');
       const obj = {};
-      const fieldMatches = block.matchAll(/<(\w+)>([\s\S]*?)<\/\1>/g);
+      const fieldMatches = inner.matchAll(/<(\w+)>([\s\S]*?)<\/\1>/g);
       for (const m of fieldMatches) obj[m[1]] = m[2].trim();
       if (Object.keys(obj).length > 0) items.push(obj);
     }
