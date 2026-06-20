@@ -1,45 +1,40 @@
-// 검색 결과 HTML 전체에서 "보험" 글자 주변과 약품 링크 패턴을 모두 찾기
+// search.js의 kpicSearch/kpicDetail을 그대로 가져와서 단계별로 테스트
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const result = {};
 
+  const word = '자디앙';
+
+  // 1단계: kpicSearch 그대로 재현
   try {
-    const r = await fetch('https://www.health.kr/searchDrug/result_drug.asp?drug_name=' + encodeURIComponent('자디앙'), {
+    const now = Date.now();
+    const url = `https://www.health.kr/searchDrug/ajax/ajax_commonSearch.asp?search_word=${encodeURIComponent(word)}&search_flag=all&_=${now}`;
+    const r = await fetch(url, {
+      method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'ko-KR,ko;q=0.9',
+        'accept': 'application/json, text/javascript, */*; q=0.01',
+        'accept-language': 'ko,en-US;q=0.9,en;q=0.8',
+        'x-requested-with': 'XMLHttpRequest',
+        'cache-control': 'no-cache',
+        'pragma': 'no-cache',
+        'Referer': 'https://www.health.kr/searchDrug/search_total_result.asp',
       },
     });
-    const html = await r.text();
-    result.status = r.status;
-    result.length = html.length;
-
-    // "보험" 글자가 나오는 모든 위치 (최대 3개) 주변 텍스트
-    const priceContexts = [];
-    let searchFrom = 0;
-    for (let i = 0; i < 3; i++) {
-      const idx = html.indexOf('보험', searchFrom);
-      if (idx === -1) break;
-      priceContexts.push(html.substring(Math.max(0,idx-50), idx+300));
-      searchFrom = idx + 1;
+    result.search_url = url;
+    result.search_status = r.status;
+    result.search_headers = Object.fromEntries(r.headers.entries());
+    const text = await r.text();
+    result.search_raw_text = text.substring(0, 1500);
+    try {
+      const data = JSON.parse(text);
+      result.search_parsed_type = Array.isArray(data) ? 'array' : typeof data;
+      result.search_parsed_length = Array.isArray(data) ? data.length : null;
+      result.search_first_item = Array.isArray(data) && data.length > 0 ? data[0] : null;
+    } catch(e) {
+      result.search_parse_error = e.message;
     }
-    result.price_contexts = priceContexts;
-
-    // 모든 <a> 태그 중 약품 상세로 가는 링크 패턴 (href 전체)
-    const linkMatches = html.match(/<a[^>]*href="[^"]*"[^>]*>/g);
-    result.all_links_sample = linkMatches ? linkMatches.slice(0, 15) : [];
-
-    // onclick 패턴 전체
-    const onclicks = html.match(/onclick="[^"]*"/g);
-    result.onclick_sample = onclicks ? onclicks.slice(0, 10) : [];
-
-    // 약품명 "자디앙" 등장 횟수와 그 주변 태그 구조
-    const drugIdx = html.indexOf('자디앙');
-    result.drug_card_html = drugIdx !== -1 ? html.substring(Math.max(0,drugIdx-500), drugIdx+1000) : 'NOT_FOUND';
-
   } catch(e) {
-    result.error = e.message;
+    result.search_fetch_error = e.message;
   }
 
   res.status(200).json(result);
