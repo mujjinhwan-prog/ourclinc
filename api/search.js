@@ -46,12 +46,22 @@ export default async function handler(req, res) {
     try {
       // 괄호 제거 + 앞 8자로 검색 (너무 길면 결과 없음)
       const word = drugName.replace(/\(.*?\)/g, '').trim().substring(0, 10);
-      const url = `${HEALTH_KR}/ajax_commonSearch.asp?search_word=${encodeURIComponent(word)}&search_flag=all&_=${Date.now()}`;
-      const r = await fetch(url, { headers: HKHEADERS, signal: AbortSignal.timeout(8000) });
+      const url = `${HEALTH_KR}/ajax_commonSearch.asp`;
+      const body = new URLSearchParams({ search_word: word, search_flag: 'all' });
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { ...HKHEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+        signal: AbortSignal.timeout(8000),
+      });
       if (!r.ok) { console.log('healthKr search failed:', r.status); return []; }
       const text = await r.text();
-      const data = JSON.parse(text);
-      if (!Array.isArray(data)) return [];
+      let data;
+      try { data = JSON.parse(text); } catch { console.log('healthKr search parse fail:', text.substring(0,200)); return []; }
+      if (!Array.isArray(data)) {
+        console.log('healthKr search non-array:', JSON.stringify(data).substring(0,200));
+        return [];
+      }
       console.log(`healthKr search "${word}": ${data.length}건`);
       return data; // [{drug_cd, drug_name, entp_name, ...}]
     } catch (e) {
@@ -65,16 +75,26 @@ export default async function handler(req, res) {
   // 응답: [{ins_price, ins_unit, drug_name, ...}] (보험가 포함)
   async function healthKrDetail(drugCd) {
     try {
-      const url = `${HEALTH_KR}/ajax_result_drug2.asp?drug_cd=${encodeURIComponent(drugCd)}&_=${Date.now()}`;
+      const url = `${HEALTH_KR}/ajax_result_drug2.asp`;
+      const body = new URLSearchParams({ drug_cd: drugCd });
       const r = await fetch(url, {
-        headers: { ...HKHEADERS, Referer: `https://www.health.kr/searchDrug/result_drug.asp?drug_cd=${drugCd}` },
+        method: 'POST',
+        headers: {
+          ...HKHEADERS,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Referer: `https://www.health.kr/searchDrug/result_drug.asp?drug_cd=${drugCd}`,
+        },
+        body: body.toString(),
         signal: AbortSignal.timeout(8000),
       });
-      if (!r.ok) return null;
+      if (!r.ok) { console.log('healthKr detail failed:', r.status); return null; }
       const text = await r.text();
-      const data = JSON.parse(text);
-      if (!Array.isArray(data) || data.length === 0) return null;
-      // 전체 필드명 로그 (어떤 키가 오는지 파악용)
+      let data;
+      try { data = JSON.parse(text); } catch { console.log('healthKr detail parse fail:', text.substring(0,300)); return null; }
+      if (!Array.isArray(data) || data.length === 0) {
+        console.log('healthKr detail empty:', JSON.stringify(data).substring(0,200));
+        return null;
+      }
       const item = data[0];
       console.log(`healthKr detail ${drugCd} keys:`, Object.keys(item).join(', '));
       console.log(`healthKr detail ${drugCd} data:`, JSON.stringify(item).substring(0, 500));
@@ -145,8 +165,8 @@ export default async function handler(req, res) {
       ITEM_SEQ:       it.ITEM_SEQ        || '',
       ITEM_NAME:      it.ITEM_NAME       || '',
       DRUG_SHPE:      it.DRUG_SHAPE      || it.DRUG_SHPE || '',
-      DRUG_COLO:      it.DRUG_COLO       || it.DRUG_COLO_FRONT || it.COLOR_CLASS1 || '',
-      DRUG_COLO_BACK: it.DRUG_COLO_BACK  || it.COLOR_CLASS2    || '',
+      DRUG_COLO:      it.COLOR_CLASS1    || it.DRUG_COLO || it.DRUG_COLO_FRONT || '',
+      DRUG_COLO_BACK: it.COLOR_CLASS2    || it.DRUG_COLO_BACK || '',
       PRINT_FRONT:    it.MARK_CODE_FRONT || it.PRINT_FRONT     || '',
       PRINT_BACK:     it.MARK_CODE_BACK  || it.PRINT_BACK      || '',
       FORM_CODE_NAME: it.FORM_CODE_NAME  || '',
