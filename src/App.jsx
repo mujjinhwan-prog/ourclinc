@@ -52,13 +52,23 @@ const COLOR_MAP = [
   // 투명
   ["투명","rgba(200,200,200,0.25)"],
 ];
+// 단일 글자 색상 코드 (식약처 API가 간혹 한 글자로 줄여서 반환하는 경우)
+const SINGLE_CHAR_COLOR = {
+  "노":"#F5C842","흰":"#FFFFFF","백":"#FFFFFF","분":"#F48FB1","핑":"#F48FB1",
+  "빨":"#E53935","적":"#E53935","파":"#1E88E5","청":"#1E88E5","초":"#43A047",
+  "녹":"#43A047","주":"#F47C2F","보":"#8E24AA","자":"#8E24AA","갈":"#8D6E63",
+  "회":"#9E9E9E","검":"#2C2C2C","흑":"#2C2C2C","투":"rgba(200,200,200,0.25)",
+};
 function parsePillColor(s) {
   if (!s) return null;
   const t = s.trim();
+  if (!t) return null;
   // 완전 일치 먼저
   for (const [k,v] of COLOR_MAP) if (t === k) return v;
   // 포함 매칭 (긴 키 우선 — 배열 순서로 보장)
   for (const [k,v] of COLOR_MAP) if (t.includes(k)) return v;
+  // 단일/짧은 글자 fallback (API가 "노", "갈" 등으로 줄여 보내는 경우)
+  if (SINGLE_CHAR_COLOR[t[0]]) return SINGLE_CHAR_COLOR[t[0]];
   return null;
 }
 function lighten(hex, amt=40) {
