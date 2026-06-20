@@ -138,7 +138,8 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const textColor = isLight ? "#555" : "#fff";
   const markFontSz = Math.max(7, Math.min(wPx, hPx) * 0.17);
   const strokeColor = isWhite ? "#bbb" : darken(pc, 20);
-  const uid = `pill_${pill.id || Math.random().toString(36).slice(2)}`;
+  // SVG url(#id) 참조는 괄호/한글이 섞이면 깨지므로 영숫자만으로 안전하게 생성
+  const uid = `pill_${Math.random().toString(36).slice(2)}`;
 
   // 약 몸체는 (0,0)에서 시작
   // 치수선 공간: 오른쪽 RW, 아래쪽 RH
