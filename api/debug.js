@@ -2,41 +2,37 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const result = {};
 
-  const HKHEADERS = {
-    'Accept': 'application/json, text/javascript, */*; q=0.01',
-    'Accept-Language': 'ko-KR,ko;q=0.9',
-    'X-Requested-With': 'XMLHttpRequest',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Referer': 'https://www.health.kr/searchDrug/search_total_result.asp',
-  };
-
-  // POST 방식으로 검색 시도
+  // 검색 결과 HTML 페이지 전체 길이 확인 + 약품 목록 부분 추출
   try {
-    const url = 'https://www.health.kr/searchDrug/ajax/ajax_commonSearch.asp';
-    const body = new URLSearchParams({ search_word: '자디앙', search_flag: 'all' });
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { ...HKHEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
+    const r = await fetch('https://www.health.kr/searchDrug/result_drug.asp?drug_name=' + encodeURIComponent('자디앙'), {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'text/html' },
     });
-    const text = await r.text();
-    result.search_post_status = r.status;
-    result.search_post_raw = text.substring(0, 1000);
-  } catch(e) {
-    result.search_post_error = e.message;
-  }
+    const html = await r.text();
+    result.status = r.status;
+    result.length = html.length;
 
-  // 메인 검색 페이지 HTML 자체도 확인 (실제 구조 파악용)
-  try {
-    const r2 = await fetch('https://www.health.kr/searchDrug/result_drug.asp?drug_name=' + encodeURIComponent('자디앙'), {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
-    });
-    const text2 = await r2.text();
-    result.html_page_status = r2.status;
-    result.html_page_length = text2.length;
-    result.html_page_snippet = text2.substring(0, 1500);
+    // "자디앙"이라는 글자가 나오는 위치 주변 1500자 추출 (실제 약품 카드 구조 확인)
+    const idx = html.indexOf('자디앙');
+    if (idx !== -1) {
+      result.around_drugname = html.substring(Math.max(0, idx - 200), idx + 1500);
+    } else {
+      result.around_drugname = 'NOT_FOUND';
+    }
+
+    // drug_cd 패턴이 있는지 확인
+    const drugCdMatches = html.match(/drug_cd['"=:\s]*([0-9A-Za-z]+)/g);
+    result.drug_cd_matches = drugCdMatches ? drugCdMatches.slice(0, 5) : [];
+
+    // 보험급여 글자가 있는 위치
+    const priceIdx = html.indexOf('보험');
+    if (priceIdx !== -1) {
+      result.around_price = html.substring(Math.max(0, priceIdx - 100), priceIdx + 500);
+    } else {
+      result.around_price = 'NOT_FOUND';
+    }
+
   } catch(e) {
-    result.html_page_error = e.message;
+    result.error = e.message;
   }
 
   res.status(200).json(result);
