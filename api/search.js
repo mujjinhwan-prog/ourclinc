@@ -102,6 +102,7 @@ export default async function handler(req, res) {
     return {
       ITEM_SEQ:       it.ITEM_SEQ        || '',
       ITEM_NAME:      it.ITEM_NAME       || '',
+      ENTP_NAME:      it.ENTP_NAME       || '',
       DRUG_SHPE:      it.DRUG_SHAPE      || it.DRUG_SHPE || '',
       DRUG_COLO:      it.COLOR_CLASS1    || it.DRUG_COLO || it.DRUG_COLO_FRONT || '',
       DRUG_COLO_BACK: it.COLOR_CLASS2    || it.DRUG_COLO_BACK || '',
