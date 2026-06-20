@@ -604,7 +604,7 @@ ${priceStr}
                           </div>
                           <span>1cm</span>
                         </div>
-                        {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>{pill.entpName}</div>}
+                        {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>제조/판매: {pill.entpName}</div>}
                         {/* 보험가 슬롯 표시 — 가독성을 위해 기존 대비 2배 크기 */}
                         {pill.price
                           ? <div style={{fontSize:FS.xs*2,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"3px 10px"}}>
