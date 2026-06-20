@@ -408,39 +408,46 @@ export default function App() {
     const SCALE=1.5;
     const ppm=11.811*SCALE;
     const today=new Date().toLocaleDateString("ko-KR");
+    const CARD_H = 280;       // 인쇄 카드 고정 높이 (화면 슬롯 260px와 통일감 있게)
+    const SHAPE_BOX = 95;      // 약 모양이 들어가는 고정 박스 크기 (가로/세로)
     const pillHtml=(pill,idx)=>{
-      if(!pill) return `<div style="border:1px dashed #dde;border-radius:8px;min-height:150px;display:flex;align-items:center;justify-content:center;color:#dde;font-size:10.5pt;">빈 슬롯</div>`;
+      if(!pill) return `<div style="border:1px dashed #dde;border-radius:8px;height:${CARD_H}px;display:flex;align-items:center;justify-content:center;color:#dde;font-size:10.5pt;">빈 슬롯</div>`;
       const color=ACCENT[idx];
       const pc=pill.colorCss||"#e0e0e0";
       const isWhite=pc==="#FFFFFF";
       const isLight=["#FFFFFF","#FFF0A0","#FBBCD4","#FFCCAA","#90CAF9","#9CCC65","#CE93D8"].includes(pc);
-      const wPx=(pill.width*ppm).toFixed(1);
-      const hPx=(pill.height*ppm).toFixed(1);
+      // 약 모양을 SHAPE_BOX 안에 맞춰서 비율 유지한 채 축소 (큰 약도 작은 약도 같은 박스 크기)
+      const rawW=pill.width*ppm, rawH=pill.height*ppm;
+      const fitScale=Math.min(1, (SHAPE_BOX*0.62)/Math.max(rawW,rawH));
+      const wPx=(rawW*fitScale).toFixed(1);
+      const hPx=(rawH*fitScale).toFixed(1);
       let br="50%";
-      if(pill.shape==="oblong"||pill.shape==="oval")br=(Math.min(pill.width,pill.height)*ppm*0.45).toFixed(1)+"px";
+      if(pill.shape==="oblong"||pill.shape==="oval")br=(Math.min(pill.width,pill.height)*ppm*fitScale*0.45).toFixed(1)+"px";
       if(pill.shape==="rectangle")br="4px";
       if(pill.shape==="pentagon"||pill.shape==="hexagon")br="20%";
       const cp=pill.shape==="diamond"?"clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);":"";
       const mark=pill.markFront||pill.mark?.split("/")[0].trim()||"";
-      const markSz=Math.max(9,Math.min(pill.width,pill.height)*ppm*0.16).toFixed(1);
-      const rp=(parseFloat(wPx)+10).toFixed(1);
-      const oneCmPx=(37.8*SCALE).toFixed(1);
+      const markSz=Math.max(7,Math.min(parseFloat(wPx),parseFloat(hPx))*0.18).toFixed(1);
+      const rp=(parseFloat(wPx)+8).toFixed(1);
+      const oneCmPx=(37.8*SCALE*fitScale).toFixed(1);
       const pcL=lighten(pc,50);
       const pcD=darken(pc,30);
       const priceStr = pill.price
         ? `<b style="color:#0ca678;-webkit-print-color-adjust:exact;">${Number(pill.price).toLocaleString()}원/${pill.priceUnit||"정"}</b>`
         : `<span style="color:#94a3b8;font-size:9pt;">보험가 미등재</span>`;
-      return `<div style="border:1.5px solid ${color}55;border-radius:10px;padding:10px 10px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;background:white;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-<div style="font-size:9pt;font-weight:700;color:${color};text-align:center;width:100%;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:2px;word-break:keep-all;line-height:1.3;">${pill.name}</div>
-<div style="position:relative;display:inline-flex;align-items:flex-start;margin:4px 32px 2px 4px;">
+      return `<div style="border:1.5px solid ${color}55;border-radius:10px;padding:10px 10px 8px;height:${CARD_H}px;display:flex;flex-direction:column;align-items:center;gap:4px;background:white;-webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:hidden;">
+<div style="font-size:9pt;font-weight:700;color:${color};text-align:center;width:100%;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:2px;word-break:keep-all;line-height:1.3;min-height:24px;">${pill.name}</div>
+<div style="width:100%;height:${SHAPE_BOX}px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+<div style="position:relative;display:inline-flex;align-items:flex-start;margin:0 28px 0 4px;">
 <div style="width:${wPx}px;height:${hPx}px;border-radius:${br};${cp}background:radial-gradient(circle at 38% 32%,${pcL},${pc},${pcD});box-shadow:${isWhite?"0 4px 14px rgba(0,0,0,0.2)":"0 4px 16px "+pc+"88"};border:${isWhite?"2px solid #bbb":"1.5px solid "+darken(pc,20)};outline:3px solid ${color}44;outline-offset:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
 <span style="font-family:monospace;font-weight:900;font-size:${markSz}px;color:${isLight?"#555":"#fff"};opacity:0.85;">${mark}</span></div>
 <div style="position:absolute;left:${rp}px;top:0;height:${hPx}px;display:flex;align-items:center;gap:3px;">
 <div style="width:2px;height:100%;background:${color}bb;position:relative;"><div style="position:absolute;left:-4px;top:0;width:10px;height:2px;background:${color}bb;"></div><div style="position:absolute;left:-4px;bottom:0;width:10px;height:2px;background:${color}bb;"></div></div>
-<span style="font-family:monospace;font-size:8pt;color:${color};font-weight:700;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;">${pill.height}mm</span></div></div>
-<div style="width:${wPx}px;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="width:100%;height:2px;background:${color}bb;position:relative;"><div style="position:absolute;left:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div><div style="position:absolute;right:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div></div><span style="font-family:monospace;font-size:8pt;color:${color};font-weight:700;">${pill.width}mm</span></div>
-<div style="display:flex;align-items:center;gap:4px;font-size:8pt;color:#888;margin:2px 0;"><div style="width:${oneCmPx}px;height:2px;background:#bbb;position:relative;-webkit-print-color-adjust:exact;"><div style="position:absolute;left:0;top:-3px;width:2px;height:8px;background:#bbb;"></div><div style="position:absolute;right:0;top:-3px;width:2px;height:8px;background:#bbb;"></div></div><span>1cm</span></div>
-<div style="font-size:8pt;color:#444;text-align:center;line-height:1.8;width:100%;">
+<span style="font-family:monospace;font-size:7pt;color:${color};font-weight:700;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;">${pill.height}mm</span></div></div>
+</div>
+<div style="width:${wPx}px;display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;"><div style="width:100%;height:2px;background:${color}bb;position:relative;"><div style="position:absolute;left:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div><div style="position:absolute;right:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div></div><span style="font-family:monospace;font-size:7pt;color:${color};font-weight:700;">${pill.width}mm</span></div>
+<div style="display:flex;align-items:center;gap:4px;font-size:7pt;color:#888;margin:1px 0;flex-shrink:0;"><div style="width:${oneCmPx}px;height:2px;background:#bbb;position:relative;-webkit-print-color-adjust:exact;"><div style="position:absolute;left:0;top:-3px;width:2px;height:8px;background:#bbb;"></div><div style="position:absolute;right:0;top:-3px;width:2px;height:8px;background:#bbb;"></div></div><span>1cm</span></div>
+<div style="font-size:7.5pt;color:#444;text-align:center;line-height:1.6;width:100%;overflow:hidden;">
 ${pill.etcOtc?`<span style="-webkit-print-color-adjust:exact;font-weight:700;color:${pill.etcOtc.includes("전문")?"#dc2626":"#16a34a"}">${pill.etcOtc.includes("전문")?"전문의약품":"일반의약품"}</span><br>`:""}
 <b style="color:${color};-webkit-print-color-adjust:exact;">Width: ${pill.width}mm</b><br>
 <b style="color:${color};-webkit-print-color-adjust:exact;">Height: ${pill.height}mm</b><br>
