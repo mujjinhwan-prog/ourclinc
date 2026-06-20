@@ -574,9 +574,8 @@ ${priceStr}
           </div>
         </div>
 
-        {/* ─── 슬롯 그리드 ─── */}
+        {/* ─── 슬롯 그리드: 1~8번(2줄) 항상 모두 표시 ─── */}
         {rows.map((row,ri)=>{
-          if(ri===1&&!row.some(x=>x.pill)&&activeSlot<ROW)return null;
           return(
             <div key={ri} className="slot-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
               {row.map(({pill,idx})=>{
