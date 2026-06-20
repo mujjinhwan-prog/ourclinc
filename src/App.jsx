@@ -143,8 +143,8 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
 
   // 약 몸체는 (0,0)에서 시작
   // 치수선 공간: 오른쪽 RW, 아래쪽 RH
-  const RW = 36;   // 오른쪽 세로치수선 폭 (선+텍스트)
-  const RH = 26;   // 아래쪽 가로치수선 높이 (선+텍스트)
+  const RW = 44;   // 오른쪽 세로치수선 폭 (선+텍스트, 폰트 확대 반영)
+  const RH = 32;   // 아래쪽 가로치수선 높이 (선+텍스트, 폰트 확대 반영)
 
   const svgW = wPx + RW;
   const svgH = hPx + RH;
@@ -156,8 +156,8 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
       <line x1={0}   y1={RY} x2={wPx} y2={RY} stroke={accentColor} strokeWidth="1.5"/>
       <line x1={0}   y1={RY-4} x2={0}   y2={RY+4} stroke={accentColor} strokeWidth="1.5"/>
       <line x1={wPx} y1={RY-4} x2={wPx} y2={RY+4} stroke={accentColor} strokeWidth="1.5"/>
-      <text x={wPx/2} y={RY+13} textAnchor="middle"
-        fontSize="9" fill={accentColor} fontFamily="monospace" fontWeight="700">{pill.width}mm</text>
+      <text x={wPx/2} y={RY+18} textAnchor="middle"
+        fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700">{pill.width}mm</text>
     </g>
   );
 
@@ -170,10 +170,10 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
       <line x1={RX-4} y1={0}   x2={RX+4} y2={0}   stroke={accentColor} strokeWidth="1.5"/>
       <line x1={RX-4} y1={hPx} x2={RX+4} y2={hPx} stroke={accentColor} strokeWidth="1.5"/>
       <text
-        x={RX+18} y={midY}
+        x={RX+24} y={midY}
         textAnchor="middle" dominantBaseline="middle"
-        fontSize="9" fill={accentColor} fontFamily="monospace" fontWeight="700"
-        transform={`rotate(-90,${RX+18},${midY})`}
+        fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700"
+        transform={`rotate(-90,${RX+24},${midY})`}
       >{pill.height}mm</text>
     </g>
   );
