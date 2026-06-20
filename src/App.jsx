@@ -149,14 +149,17 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   // 그만큼 캔버스 폭을 키우고 약 몸체를 가로 중앙(X0)에 배치
   const wTextPx = wLabelLen * 13 * 0.62 + 8;
   const drawW = Math.max(wPx, wTextPx);
-  const X0 = (drawW - wPx) / 2;
-  const Y0 = 0;   // 세로 치수선이 가로 텍스트로 바뀌어 더 이상 세로 보정 불필요
 
-  const RW = 16 + hLabelLen * 9;   // 오른쪽 세로치수선 폭 — 가로로 눕힌 텍스트 길이만큼
-  const RH = 36;                    // 아래쪽 가로치수선 높이
+  // 약 몸체 둘레의 그림자/강조 링이 캔버스 밖으로 잘리지 않도록 사방 여백 확보
+  const PAD = 6;
+  const X0 = (drawW - wPx) / 2 + PAD;
+  const Y0 = PAD;
 
-  const svgW = drawW + RW;
-  const svgH = hPx + RH;
+  const RW = 16 + hLabelLen * 9 + PAD;   // 오른쪽 세로치수선 폭 — 가로로 눕힌 텍스트 길이만큼
+  const RH = 36 + PAD;                    // 아래쪽 가로치수선 높이
+
+  const svgW = drawW + RW + PAD;
+  const svgH = hPx + RH + PAD;
 
   // ── 가로 치수선 (약 아래) ──
   const RY = Y0 + hPx + 8;
