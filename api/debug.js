@@ -1,29 +1,43 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  const MFDS_KEY = process.env.MFDS_API_KEY;
   const result = {};
 
-  try {
-    const params = new URLSearchParams({
-      serviceKey: MFDS_KEY, item_name: '자디앙',
-      type: 'json', numOfRows: '1', pageNo: '1',
-    });
-    const r = await fetch('https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + params);
-    const d = await r.json();
-    const items = d?.body?.items || d?.response?.body?.items?.item;
-    const first = Array.isArray(items) ? items[0] : items;
-    result.mfds = first;
-  } catch(e) { result.mfds_error = e.message; }
+  const HKHEADERS = {
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'ko-KR,ko;q=0.9',
+    'X-Requested-With': 'XMLHttpRequest',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Referer': 'https://www.health.kr/searchDrug/search_total_result.asp',
+  };
 
+  // POST 방식으로 검색 시도
   try {
-    const url = `https://www.health.kr/searchDrug/ajax/ajax_commonSearch.asp?search_word=${encodeURIComponent('자디앙')}&search_flag=all`;
+    const url = 'https://www.health.kr/searchDrug/ajax/ajax_commonSearch.asp';
+    const body = new URLSearchParams({ search_word: '자디앙', search_flag: 'all' });
     const r = await fetch(url, {
-      headers: { 'X-Requested-With': 'XMLHttpRequest', 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.health.kr/' }
+      method: 'POST',
+      headers: { ...HKHEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
     });
     const text = await r.text();
-    result.healthkr_status = r.status;
-    result.healthkr_raw = text.substring(0, 800);
-  } catch(e) { result.healthkr_error = e.message; }
+    result.search_post_status = r.status;
+    result.search_post_raw = text.substring(0, 1000);
+  } catch(e) {
+    result.search_post_error = e.message;
+  }
+
+  // 메인 검색 페이지 HTML 자체도 확인 (실제 구조 파악용)
+  try {
+    const r2 = await fetch('https://www.health.kr/searchDrug/result_drug.asp?drug_name=' + encodeURIComponent('자디앙'), {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
+    });
+    const text2 = await r2.text();
+    result.html_page_status = r2.status;
+    result.html_page_length = text2.length;
+    result.html_page_snippet = text2.substring(0, 1500);
+  } catch(e) {
+    result.html_page_error = e.message;
+  }
 
   res.status(200).json(result);
 }
