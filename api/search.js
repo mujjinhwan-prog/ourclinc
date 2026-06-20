@@ -12,15 +12,6 @@ export default async function handler(req, res) {
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
-  const HEALTH_KR = 'https://www.health.kr/searchDrug/ajax';
-  const HKHEADERS = {
-    'Accept': 'application/json, text/javascript, */*; q=0.01',
-    'Accept-Language': 'ko-KR,ko;q=0.9',
-    'X-Requested-With': 'XMLHttpRequest',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Referer': 'https://www.health.kr/searchDrug/search_total_result.asp',
-  };
-
   // ── 식약처 낱알식별 조회 ─────────────────────────────────────────────────────
   async function callMfds(word, rows = 30) {
     const params = new URLSearchParams({
@@ -39,68 +30,65 @@ export default async function handler(req, res) {
     return [];
   }
 
-  // ── 약학정보원 1단계: 검색 → drug_cd 목록 획득 ──────────────────────────────
-  // GET ajax_commonSearch.asp?search_word=자디앙&search_flag=all
-  // 응답: [{drug_cd, drug_name, ...}, ...]
-  async function healthKrSearch(drugName) {
+  // ── 약학정보원(KPIC) 검색: GET + 정확한 Referer/헤더 조합 ───────────────────
+  // 검증된 방식 (커뮤니티 MCP 서버 구현 참고)
+  async function kpicSearch(drugName) {
     try {
-      // 괄호 제거 + 앞 8자로 검색 (너무 길면 결과 없음)
       const word = drugName.replace(/\(.*?\)/g, '').trim().substring(0, 10);
-      const url = `${HEALTH_KR}/ajax_commonSearch.asp`;
-      const body = new URLSearchParams({ search_word: word, search_flag: 'all' });
+      const now = Date.now();
+      const url = `https://www.health.kr/searchDrug/ajax/ajax_commonSearch.asp?search_word=${encodeURIComponent(word)}&search_flag=all&_=${now}`;
       const r = await fetch(url, {
-        method: 'POST',
-        headers: { ...HKHEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
+        method: 'GET',
+        headers: {
+          'accept': 'application/json, text/javascript, */*; q=0.01',
+          'accept-language': 'ko,en-US;q=0.9,en;q=0.8',
+          'x-requested-with': 'XMLHttpRequest',
+          'cache-control': 'no-cache',
+          'pragma': 'no-cache',
+          'Referer': 'https://www.health.kr/searchDrug/search_total_result.asp',
+        },
         signal: AbortSignal.timeout(8000),
       });
-      if (!r.ok) { console.log('healthKr search failed:', r.status); return []; }
+      if (!r.ok) { console.log('kpicSearch failed:', r.status); return []; }
       const text = await r.text();
       let data;
-      try { data = JSON.parse(text); } catch { console.log('healthKr search parse fail:', text.substring(0,200)); return []; }
-      if (!Array.isArray(data)) {
-        console.log('healthKr search non-array:', JSON.stringify(data).substring(0,200));
-        return [];
-      }
-      console.log(`healthKr search "${word}": ${data.length}건`);
-      return data; // [{drug_cd, drug_name, entp_name, ...}]
+      try { data = JSON.parse(text); } catch { console.log('kpicSearch parse fail:', text.substring(0,200)); return []; }
+      if (!Array.isArray(data)) { console.log('kpicSearch non-array:', JSON.stringify(data).substring(0,200)); return []; }
+      console.log(`kpicSearch "${word}": ${data.length}건`);
+      return data;
     } catch (e) {
-      console.error('healthKr search error:', e.message);
+      console.error('kpicSearch error:', e.message);
       return [];
     }
   }
 
-  // ── 약학정보원 2단계: drug_cd로 상세 JSON 조회 ──────────────────────────────
-  // GET ajax_result_drug2.asp?drug_cd=XXX
-  // 응답: [{ins_price, ins_unit, drug_name, ...}] (보험가 포함)
-  async function healthKrDetail(drugCd) {
+  // ── 약학정보원(KPIC) 상세 조회: GET + drug_cd 기반 Referer ──────────────────
+  async function kpicDetail(drugCd) {
     try {
-      const url = `${HEALTH_KR}/ajax_result_drug2.asp`;
-      const body = new URLSearchParams({ drug_cd: drugCd });
+      const now = Date.now();
+      const url = `https://www.health.kr/searchDrug/ajax/ajax_result_drug2.asp?drug_cd=${encodeURIComponent(drugCd)}&_=${now}`;
       const r = await fetch(url, {
-        method: 'POST',
+        method: 'GET',
         headers: {
-          ...HKHEADERS,
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Referer: `https://www.health.kr/searchDrug/result_drug.asp?drug_cd=${drugCd}`,
+          'accept': 'application/json, text/javascript, */*; q=0.01',
+          'accept-language': 'ko,en-US;q=0.9,en;q=0.8',
+          'x-requested-with': 'XMLHttpRequest',
+          'cache-control': 'no-cache',
+          'pragma': 'no-cache',
+          'Referer': `https://www.health.kr/searchDrug/result_drug.asp?drug_cd=${encodeURIComponent(drugCd)}`,
         },
-        body: body.toString(),
         signal: AbortSignal.timeout(8000),
       });
-      if (!r.ok) { console.log('healthKr detail failed:', r.status); return null; }
+      if (!r.ok) { console.log('kpicDetail failed:', r.status); return null; }
       const text = await r.text();
       let data;
-      try { data = JSON.parse(text); } catch { console.log('healthKr detail parse fail:', text.substring(0,300)); return null; }
-      if (!Array.isArray(data) || data.length === 0) {
-        console.log('healthKr detail empty:', JSON.stringify(data).substring(0,200));
-        return null;
-      }
+      try { data = JSON.parse(text); } catch { console.log('kpicDetail parse fail:', text.substring(0,300)); return null; }
+      if (!Array.isArray(data) || data.length === 0) { console.log('kpicDetail empty'); return null; }
       const item = data[0];
-      console.log(`healthKr detail ${drugCd} keys:`, Object.keys(item).join(', '));
-      console.log(`healthKr detail ${drugCd} data:`, JSON.stringify(item).substring(0, 500));
+      console.log(`kpicDetail ${drugCd} keys:`, Object.keys(item).join(', '));
       return item;
     } catch (e) {
-      console.error('healthKr detail error:', e.message);
+      console.error('kpicDetail error:', e.message);
       return null;
     }
   }
@@ -108,48 +96,40 @@ export default async function handler(req, res) {
   // ── 약학정보원 보험가 조회 (검색 → best 매칭 → 상세) ───────────────────────
   async function callHealthKrPrice(itemName) {
     try {
-      const searchResults = await healthKrSearch(itemName);
+      const searchResults = await kpicSearch(itemName);
       if (!searchResults.length) return null;
 
-      // 품목명 유사도로 best 선택
       const keyword = itemName.replace(/\s|\(.*?\)/g, '').substring(0, 6);
       const best = searchResults.find(d =>
-        (d.drug_name || '').replace(/\s/g, '').includes(keyword)
+        (d.drug_name || d.item_name || '').replace(/\s/g, '').includes(keyword)
       ) || searchResults[0];
 
-      const drugCd = best.drug_cd;
-      if (!drugCd) return null;
+      const drugCd = best.drug_cd || best.drugcd || best.code;
+      if (!drugCd) { console.log('no drug_cd in search result:', JSON.stringify(best).substring(0,200)); return null; }
 
-      const detail = await healthKrDetail(drugCd);
+      const detail = await kpicDetail(drugCd);
       if (!detail) return null;
 
-      // 보험급여가 필드 탐색
-      // ajax_result_drug2 응답에서 실제 확인된 필드명들:
-      // ins_price: 보험급여가(원), ins_unit: 단위(정/캡슐 등)
-      // 또는 insurance_price, insr_price, reimbursement_price
       const priceRaw =
-        detail.ins_price          ??
-        detail.insurance_price    ??
-        detail.insr_price         ??
-        detail.reimbursement_price??
-        detail.ins_amt            ??
-        detail.price              ??
+        detail.ins_price           ??
+        detail.insurance_price     ??
+        detail.insr_price          ??
+        detail.reimbursement_price ??
+        detail.price               ??
         null;
 
-      const unit =
-        detail.ins_unit  ||
-        detail.unit      ||
-        detail.pack_unit ||
-        '정';
+      const unit = detail.ins_unit || detail.unit || detail.pack_unit || '정';
 
-      if (priceRaw === null || priceRaw === undefined || priceRaw === '') return null;
+      if (priceRaw === null || priceRaw === undefined || priceRaw === '') {
+        console.log('no price field, detail dump:', JSON.stringify(detail).substring(0,400));
+        return null;
+      }
 
       const price = parseFloat(String(priceRaw).replace(/,/g, ''));
       if (isNaN(price) || price <= 0) return null;
 
-      console.log(`healthKr price "${itemName}": ${price}원/${unit} (drug_cd:${drugCd})`);
+      console.log(`KPIC price "${itemName}": ${price}원/${unit} (drug_cd:${drugCd})`);
       return { price, unit };
-
     } catch (e) {
       console.error('callHealthKrPrice error:', e.message);
       return null;
@@ -214,7 +194,6 @@ export default async function handler(req, res) {
     // ── 약학정보원 보험가 조회 (중복 캐시) ────────────────────────────────────
     if (mfdsResult.length > 0) {
       const priceCache = new Map();
-
       mfdsResult = await Promise.all(mfdsResult.map(async it => {
         try {
           const cacheKey = it.ITEM_NAME.replace(/\(.*?\)/g,'').trim().substring(0, 8);
