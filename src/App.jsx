@@ -196,7 +196,7 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
     const rx = Math.min(wPx, hPx) / 2;
     const midX = X0 + wPx / 2;
     return (
-      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} xmlns="http://www.w3.org/2000/svg">
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} xmlns="http://www.w3.org/2000/svg" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto"}}>
         <defs>
           <linearGradient id={`${uid}_capL`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"   stopColor={pcL}/>
@@ -271,7 +271,7 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const useRect = !shapePath;
 
   return (
-    <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} xmlns="http://www.w3.org/2000/svg">
+    <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} xmlns="http://www.w3.org/2000/svg" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto"}}>
       <defs>
         <radialGradient id={`${uid}_rg`} cx="38%" cy="32%" r="65%">
           <stop offset="0%"   stopColor={pcL}/>
@@ -348,7 +348,6 @@ export default function App() {
   const [pxPerMm,setPxPerMm]       = useState(3.7795);
   const [dpiInfo,setDpiInfo]       = useState("DPI 측정 중...");
   const [ppiInput,setPpiInput]     = useState("");
-  const [printScale,setPrintScale] = useState("1.5");   // 인쇄 배율 (사용자 입력, 기본 1.5배)
   const debRef=useRef(null), inRef=useRef(null), dropRef=useRef(null);
 
   // ── 폰트 스케일: 기존 대비 1.5배 ──
@@ -406,7 +405,7 @@ export default function App() {
 
   // ── 인쇄 ──
   const handlePrint=()=>{
-    const SCALE=Math.max(0.1,Math.min(5,parseFloat(printScale)||1.5));
+    const SCALE=1.5;
     const ppm=11.811*SCALE;
     const today=new Date().toLocaleDateString("ko-KR");
     const pillHtml=(pill,idx)=>{
@@ -566,11 +565,6 @@ ${priceStr}
               <button onClick={applyPPI} style={{padding:"3px 10px",background:"#3b5bdb",border:"none",borderRadius:5,color:"white",fontSize:FS.sm,cursor:"pointer",fontFamily:"inherit"}}>적용</button>
               <span style={{fontSize:FS.sm,color:"#6366f1"}}>아이폰15:460 / 갤S24:416</span>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:7,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"6px 14px",fontSize:FS.base,color:"#92400e"}}>
-              🖨️ 인쇄 배율:
-              <input type="number" value={printScale} onChange={e=>setPrintScale(e.target.value)} placeholder="1.5" min="0.1" max="5" step="0.1" style={{width:62,padding:"3px 8px",border:"1px solid #fde68a",borderRadius:5,fontSize:FS.base,color:"#1a1f36",background:"white",outline:"none"}}/>
-              <span style={{fontSize:FS.sm,color:"#d97706"}}>배 (예: 0.2, 1, 2)</span>
-            </div>
           </div>
         </div>
 
@@ -583,7 +577,7 @@ ${priceStr}
                 const pillBg=pill?.colorCss||null;
                 return(
                   <div key={idx} onClick={()=>clickSlot(idx)}
-                    style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",minHeight:180,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative"}}
+                    style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",height:260,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
                     onMouseEnter={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f0f4ff";}}
                     onMouseLeave={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f8fafc";}}>
                     {pill?(
@@ -593,8 +587,10 @@ ${priceStr}
                           <span style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0,display:"inline-block"}}/>
                           <span style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"keep-all",textAlign:"center"}}>{pill.name}</span>
                         </div>
-                        <div style={{display:"flex",justifyContent:"center",padding:"6px 32px 2px 4px"}}>
-                          <PillShapeEl pill={pill} pxPerMm={pxPerMm} accentColor={color}/>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:90,overflow:"hidden"}}>
+                          <div style={{maxWidth:"100%",maxHeight:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            <PillShapeEl pill={pill} pxPerMm={pxPerMm} accentColor={color}/>
+                          </div>
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:4,fontSize:FS.xs,color:"#94a3b8"}}>
                           <div style={{width:oneCm,height:1.5,background:"#cbd5e1",position:"relative"}}>
