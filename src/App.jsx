@@ -470,7 +470,7 @@ export default function App() {
           <div style={{width:1,height:28,background:"#e2e8f0",flexShrink:0}}/>
           <div>
             <div style={{fontSize:FS.xl,fontWeight:700,color:"#1a1f36"}}>약품 실제 크기 비교</div>
-            <div style={{fontSize:FS.sm,color:"#64748b"}}>식약처 공식 낱알식별 데이터 made by mujjinhwan</div>
+            <div style={{fontSize:FS.sm,color:"#64748b"}}>건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
           </div>
           <div className="no-print" style={{marginLeft:"auto",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",fontSize:FS.sm,fontFamily:"monospace",color:"#0ca678",whiteSpace:"nowrap"}}>{dpiInfo}</div>
         </div>
@@ -541,7 +541,7 @@ export default function App() {
             <img className="print-logo" src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" onError={e=>{e.target.style.display="none";}}/>
             <div>
               <div className="print-title">약품 실제 크기 비교표</div>
-              <div className="print-sub">식약처 공식 낱알식별 데이터 · Voice of YUHAN · made by mujjinhwan</div>
+              <div className="print-sub">건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
             </div>
             <div className="print-date">인쇄일: {new Date().toLocaleDateString("ko-KR")}</div>
           </div>
