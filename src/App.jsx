@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 
 // ─── 모양 / 색상 매핑 ─────────────────────────────────────────────────────────
 const SHAPE_MAP = {
@@ -403,70 +403,11 @@ export default function App() {
   const applyPPI=()=>{const v=parseInt(ppiInput);if(!v||v<72||v>600)return;
     const ppm=v/25.4;setPxPerMm(ppm);setDpiInfo(v+" PPI (수동) · "+ppm.toFixed(2)+"px/mm");};
 
-  // ── 인쇄 ──
+  // ── 인쇄: 화면에 보이는 8개 슬롯 카드(#printArea)를 그대로 인쇄, 1~4번/5~8번 사이 VS 구분선 포함 ──
   const handlePrint=()=>{
-    const SCALE=1.5;
-    const ppm=11.811*SCALE;
-    const today=new Date().toLocaleDateString("ko-KR");
-    const CARD_H = 280;       // 인쇄 카드 고정 높이 (화면 슬롯 260px와 통일감 있게)
-    const SHAPE_BOX = 95;      // 약 모양이 들어가는 고정 박스 크기 (가로/세로)
-    const pillHtml=(pill,idx)=>{
-      if(!pill) return `<div style="border:1px dashed #dde;border-radius:8px;height:${CARD_H}px;display:flex;align-items:center;justify-content:center;color:#dde;font-size:10.5pt;">빈 슬롯</div>`;
-      const color=ACCENT[idx];
-      const pc=pill.colorCss||"#e0e0e0";
-      const isWhite=pc==="#FFFFFF";
-      const isLight=["#FFFFFF","#FFF0A0","#FBBCD4","#FFCCAA","#90CAF9","#9CCC65","#CE93D8"].includes(pc);
-      // 약 모양을 SHAPE_BOX 안에 맞춰서 비율 유지한 채 축소 (큰 약도 작은 약도 같은 박스 크기)
-      const rawW=pill.width*ppm, rawH=pill.height*ppm;
-      const fitScale=Math.min(1, (SHAPE_BOX*0.62)/Math.max(rawW,rawH));
-      const wPx=(rawW*fitScale).toFixed(1);
-      const hPx=(rawH*fitScale).toFixed(1);
-      let br="50%";
-      if(pill.shape==="oblong"||pill.shape==="oval")br=(Math.min(pill.width,pill.height)*ppm*fitScale*0.45).toFixed(1)+"px";
-      if(pill.shape==="rectangle")br="4px";
-      if(pill.shape==="pentagon"||pill.shape==="hexagon")br="20%";
-      const cp=pill.shape==="diamond"?"clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);":"";
-      const mark=pill.markFront||pill.mark?.split("/")[0].trim()||"";
-      const markSz=Math.max(7,Math.min(parseFloat(wPx),parseFloat(hPx))*0.18).toFixed(1);
-      const rp=(parseFloat(wPx)+8).toFixed(1);
-      const oneCmPx=(37.8*SCALE*fitScale).toFixed(1);
-      const pcL=lighten(pc,50);
-      const pcD=darken(pc,30);
-      const priceStr = pill.price
-        ? `<b style="color:#0ca678;-webkit-print-color-adjust:exact;">${Number(pill.price).toLocaleString()}원/${pill.priceUnit||"정"}</b>`
-        : `<span style="color:#94a3b8;font-size:9pt;">보험가 미등재</span>`;
-      return `<div style="border:1.5px solid ${color}55;border-radius:10px;padding:10px 10px 8px;height:${CARD_H}px;display:flex;flex-direction:column;align-items:center;gap:4px;background:white;-webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:hidden;">
-<div style="font-size:9pt;font-weight:700;color:${color};text-align:center;width:100%;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:2px;word-break:keep-all;line-height:1.3;min-height:24px;">${pill.name}</div>
-<div style="width:100%;height:${SHAPE_BOX}px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-<div style="position:relative;display:inline-flex;align-items:flex-start;margin:0 28px 0 4px;">
-<div style="width:${wPx}px;height:${hPx}px;border-radius:${br};${cp}background:radial-gradient(circle at 38% 32%,${pcL},${pc},${pcD});box-shadow:${isWhite?"0 4px 14px rgba(0,0,0,0.2)":"0 4px 16px "+pc+"88"};border:${isWhite?"2px solid #bbb":"1.5px solid "+darken(pc,20)};outline:3px solid ${color}44;outline-offset:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-<span style="font-family:monospace;font-weight:900;font-size:${markSz}px;color:${isLight?"#555":"#fff"};opacity:0.85;">${mark}</span></div>
-<div style="position:absolute;left:${rp}px;top:0;height:${hPx}px;display:flex;align-items:center;gap:3px;">
-<div style="width:2px;height:100%;background:${color}bb;position:relative;"><div style="position:absolute;left:-4px;top:0;width:10px;height:2px;background:${color}bb;"></div><div style="position:absolute;left:-4px;bottom:0;width:10px;height:2px;background:${color}bb;"></div></div>
-<span style="font-family:monospace;font-size:7pt;color:${color};font-weight:700;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;">${pill.height}mm</span></div></div>
-</div>
-<div style="width:${wPx}px;display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;"><div style="width:100%;height:2px;background:${color}bb;position:relative;"><div style="position:absolute;left:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div><div style="position:absolute;right:0;top:-3px;width:2px;height:8px;background:${color}bb;"></div></div><span style="font-family:monospace;font-size:7pt;color:${color};font-weight:700;">${pill.width}mm</span></div>
-<div style="display:flex;align-items:center;gap:4px;font-size:7pt;color:#888;margin:1px 0;flex-shrink:0;"><div style="width:${oneCmPx}px;height:2px;background:#bbb;position:relative;-webkit-print-color-adjust:exact;"><div style="position:absolute;left:0;top:-3px;width:2px;height:8px;background:#bbb;"></div><div style="position:absolute;right:0;top:-3px;width:2px;height:8px;background:#bbb;"></div></div><span>1cm</span></div>
-<div style="font-size:7.5pt;color:#444;text-align:center;line-height:1.6;width:100%;overflow:hidden;">
-${pill.etcOtc?`<span style="-webkit-print-color-adjust:exact;font-weight:700;color:${pill.etcOtc.includes("전문")?"#dc2626":"#16a34a"}">${pill.etcOtc.includes("전문")?"전문의약품":"일반의약품"}</span><br>`:""}
-<b style="color:${color};-webkit-print-color-adjust:exact;">Width: ${pill.width}mm</b><br>
-<b style="color:${color};-webkit-print-color-adjust:exact;">Height: ${pill.height}mm</b><br>
-${pill.thickness?`<b style="color:${color};-webkit-print-color-adjust:exact;">Thickness: ${pill.thickness}mm</b><br>`:""}
-${pill.entpName?`<span style="color:#64748b;">${pill.entpName}</span><br>`:""}
-${priceStr}
-</div></div>`;
-    };
-    const row1=slots.slice(0,4).map((p,i)=>pillHtml(p,i)).join("");
-    const row2=slots.slice(4,8).map((p,i)=>pillHtml(p,i+4)).join("");
-    const vsDivider=`<div style="display:flex;align-items:center;justify-content:center;margin:8px 0;-webkit-print-color-adjust:exact;"><div style="flex:1;height:3px;background:linear-gradient(90deg,#fff,#3b5bdb,#7048e8);border-radius:99px;margin-right:10px;-webkit-print-color-adjust:exact;"></div><div style="position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="120" height="52" viewBox="0 0 120 52" xmlns="http://www.w3.org/2000/svg" style="-webkit-print-color-adjust:exact;"><defs><radialGradient id="bg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#7048e8"/><stop offset="100%" stop-color="#3b5bdb"/></radialGradient></defs><rect x="8" y="10" width="104" height="32" rx="6" fill="url(#bg1)"/><rect x="8" y="10" width="104" height="32" rx="6" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.6"/><text x="18" y="31" font-family="Arial" font-size="16" fill="#FFD700" opacity="0.9">⚡</text><text x="60" y="33" font-family="Arial Black,Impact,sans-serif" font-size="18" font-weight="900" fill="white" text-anchor="middle" letter-spacing="2">VS</text><text x="88" y="31" font-family="Arial" font-size="16" fill="#FFD700" opacity="0.9">⚡</text></svg><div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#FFD700;color:#1a1f36;font-size:7pt;font-weight:900;padding:2px 8px;border-radius:99px;white-space:nowrap;-webkit-print-color-adjust:exact;">💊 약제 크기 비교 💊</div></div><div style="flex:1;height:3px;background:linear-gradient(90deg,#7048e8,#3b5bdb,#fff);border-radius:99px;margin-left:10px;-webkit-print-color-adjust:exact;"></div></div>`;
-    const html=`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>약품 크기 비교표</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:white;font-size:10.5pt;}@page{size:A4 landscape;margin:7mm}.header{display:flex;align-items:center;gap:10px;border-bottom:2.5px solid #3b5bdb;padding-bottom:5px;margin-bottom:7px;-webkit-print-color-adjust:exact;}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}.notice{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:8px;padding:6px 12px;background:#fffbeb;border:1.5px solid #FFD700;border-radius:8px;-webkit-print-color-adjust:exact;}.footer{margin-top:6px;font-size:7.5pt;color:#94a3b8;border-top:1px solid #eee;padding-top:4px;text-align:center;}</style></head><body><div class="header"><img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" style="height:36px;width:auto;" alt="logo" onerror="this.style.display='none'"/><div><div style="font-size:15pt;font-weight:700;color:#1a1f36;">약품 실제 크기 비교표</div><div style="font-size:9pt;color:#64748b;">식약처 공식 낱알식별 데이터 · Voice of YUHAN · made by mujjinhwan</div></div><div style="margin-left:auto;font-size:9pt;color:#94a3b8;">인쇄일: ${today}</div></div><div class="grid">${row1}</div>${vsDivider}<div class="grid" style="margin-top:8px;">${row2}</div><div class="notice"><span style="font-size:18pt;">⚠️</span><div><div style="font-size:10.5pt;font-weight:900;color:#d97706;-webkit-print-color-adjust:exact;">실제 크기의 ${SCALE}배로 출력되었습니다</div><div style="font-size:9pt;color:#92400e;">실제 약품 크기 = 인쇄된 크기 ÷ ${SCALE}로 계산하세요.</div></div></div><div class="footer">※ 본 출력물의 약제 형상은 실제 약품 크기(mm) 기준을 ${SCALE}배로 인쇄한 것입니다. 보험가는 HIRA 급여기준 또는 식약처 공시가 기준입니다.</div></body></html>`;
-    const iframe=document.createElement("iframe");
-    iframe.style.cssText="position:fixed;top:-9999px;left:-9999px;width:297mm;height:210mm;border:none;";
-    document.body.appendChild(iframe);
-    const doc=iframe.contentDocument||iframe.contentWindow.document;
-    doc.open();doc.write(html);doc.close();
-    setTimeout(()=>{iframe.contentWindow.focus();iframe.contentWindow.print();setTimeout(()=>document.body.removeChild(iframe),2000);},800);
+    window.print();
   };
+
 
   const oneCm=pxPerMm*10;
   const filledSlots=slots.map((s,i)=>({pill:s,idx:i})).filter(x=>x.pill);
@@ -501,10 +442,24 @@ ${priceStr}
           .btn-s{order:2;flex:1}.btn-r{order:3;flex:1}.btn-p{order:4;flex:1}
           .slot-grid{grid-template-columns:repeat(2,1fr) !important;}
         }
+        .print-vs{display:none;}
+        @media print{
+          @page{size:A4 landscape;margin:8mm}
+          body *{visibility:hidden;}
+          #printArea,#printArea *,.print-header,.print-header *{visibility:visible;}
+          .print-header{position:relative;box-shadow:none !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+          #printArea{position:relative;left:0;top:0;width:100%;margin-top:8px;}
+          .no-print{display:none !important;}
+          .print-vs{display:flex !important;align-items:center;justify-content:center;margin:10px 0;gap:10px;}
+          .print-vs .line{flex:1;height:3px;background:linear-gradient(90deg,#fff,#3b5bdb,#7048e8);border-radius:99px;}
+          .print-vs .line2{flex:1;height:3px;background:linear-gradient(90deg,#7048e8,#3b5bdb,#fff);border-radius:99px;}
+          .print-vs .badge{background:linear-gradient(135deg,#3b5bdb,#7048e8);color:white;font-weight:900;font-size:14pt;padding:6px 22px;border-radius:8px;letter-spacing:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+          .slot-grid{break-inside:avoid;grid-template-columns:repeat(4,1fr) !important;}
+        }
       `}</style>
 
-      {/* ─── 헤더 ─── */}
-      <div style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 16px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
+      {/* ─── 헤더 (인쇄 시 상단에 포함) ─── */}
+      <div className="print-header" style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 16px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
         <div style={{maxWidth:1400,margin:"0 auto",height:60,display:"flex",alignItems:"center",gap:12}}>
           <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" style={{height:44,width:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.12))"}}/>
           <div style={{width:1,height:28,background:"#e2e8f0",flexShrink:0}}/>
@@ -512,13 +467,13 @@ ${priceStr}
             <div style={{fontSize:FS.xl,fontWeight:700,color:"#1a1f36"}}>약품 실제 크기 비교</div>
             <div style={{fontSize:FS.sm,color:"#64748b"}}>식약처 공식 낱알식별 데이터 made by mujjinhwan</div>
           </div>
-          <div style={{marginLeft:"auto",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",fontSize:FS.sm,fontFamily:"monospace",color:"#0ca678",whiteSpace:"nowrap"}}>{dpiInfo}</div>
+          <div className="no-print" style={{marginLeft:"auto",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",fontSize:FS.sm,fontFamily:"monospace",color:"#0ca678",whiteSpace:"nowrap"}}>{dpiInfo}</div>
         </div>
       </div>
 
       <div style={{maxWidth:1400,margin:"0 auto",padding:"14px 12px 60px"}}>
-        {/* ─── 검색 패널 ─── */}
-        <div style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
+        {/* ─── 검색 패널 (인쇄 시 숨김) ─── */}
+        <div className="no-print" style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
           <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:12,position:"relative",zIndex:200}}>
             <div className="sbinput" style={{flex:1,position:"relative",minWidth:0}} ref={inRef}>
               <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:FS.lg,pointerEvents:"none",color:"#94a3b8"}}>🔍</span>
@@ -575,10 +530,27 @@ ${priceStr}
           </div>
         </div>
 
-        {/* ─── 슬롯 그리드: 1~8번(2줄) 항상 모두 표시 ─── */}
+        {/* ─── 슬롯 그리드: 1~8번(2줄) 항상 모두 표시, 인쇄 시 printArea만 출력 ─── */}
+        <div id="printArea">
+          <div className="print-header">
+            <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" onError={e=>{e.target.style.display="none";}}/>
+            <div>
+              <div className="print-title">약품 실제 크기 비교표</div>
+              <div className="print-sub">식약처 공식 낱알식별 데이터 · Voice of YUHAN · made by mujjinhwan</div>
+            </div>
+            <div className="print-date">인쇄일: {new Date().toLocaleDateString("ko-KR")}</div>
+          </div>
         {rows.map((row,ri)=>{
           return(
-            <div key={ri} className="slot-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+            <Fragment key={ri}>
+            {ri===1&&(
+              <div className="print-vs">
+                <div className="line"/>
+                <div className="badge">VS</div>
+                <div className="line2"/>
+              </div>
+            )}
+            <div className="slot-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
               {row.map(({pill,idx})=>{
                 const isActive=idx===activeSlot, color=ACCENT[idx];
                 const pillBg=pill?.colorCss||null;
@@ -617,14 +589,16 @@ ${priceStr}
                       </>
                     ):(
                       <>
-                        <div style={{fontSize:FS["2xl"]+8,fontWeight:800,color:isActive?color:"#cbd5e1"}}>{idx+1}</div>
-                        <div style={{fontSize:FS.base,color:isActive?color:"#94a3b8",textAlign:"center",lineHeight:1.5}}>{isActive?"← 검색 후 선택":"클릭하여 선택"}</div>
+                        <div className="no-print" style={{fontSize:FS["2xl"]+8,fontWeight:800,color:isActive?color:"#cbd5e1"}}>{idx+1}</div>
+                        <div className="no-print" style={{fontSize:FS.base,color:isActive?color:"#94a3b8",textAlign:"center",lineHeight:1.5}}>{isActive?"← 검색 후 선택":"클릭하여 선택"}</div>
                       </>
                     )}
                   </div>);
               })}
-            </div>);
+            </div>
+            </Fragment>);
         })}
+        </div>
 
         {/* ─── 정보 테이블 ─── */}
         {hasAny&&(
