@@ -123,12 +123,10 @@ async function fetchDrug(query) {
 }
 
 // ─── 약제 SVG 렌더러 ──────────────────────────────────────────────────────────
-// 레이아웃: 약 몸체 (OX,OY)에 배치, 치수선은 오른쪽·아래쪽에 여유 공간 확보
-// overflow 제거 → viewBox 안에 모든 요소가 들어오도록 svgW/svgH 계산
+// padTop으로 약 몸체를 세로 중앙 배치 → 세로 치수선 텍스트가 길어도 잘리지 않음
 function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const wPx = Math.round(pill.width  * pxPerMm);
   const hPx = Math.round(pill.height * pxPerMm);
-  // colorCss null → 연회색 기본 (검정 fallback 방지)
   const pc   = pill.colorCss || "#d0d0d0";
   const pcB  = pill.colorBack || pc;
   const pcL  = lighten(pc, 50);
@@ -138,43 +136,54 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const textColor = isLight ? "#555" : "#fff";
   const markFontSz = Math.max(7, Math.min(wPx, hPx) * 0.17);
   const strokeColor = isWhite ? "#bbb" : darken(pc, 20);
-  // SVG url(#id) 참조는 괄호/한글이 섞이면 깨지므로 영숫자만으로 안전하게 생성
   const uid = `pill_${Math.random().toString(36).slice(2)}`;
 
-  // 약 몸체는 (0,0)에서 시작
-  // 치수선 공간: 오른쪽 RW, 아래쪽 RH
-  const RW = 44;   // 오른쪽 세로치수선 폭 (선+텍스트, 폰트 확대 반영)
-  const RH = 32;   // 아래쪽 가로치수선 높이 (선+텍스트, 폰트 확대 반영)
+  // 소수점 정리 — 정수면 그대로, 아니면 소수점 1자리까지만 (예: 8.23 → 8.2)
+  const wLabel = (Number.isInteger(pill.width)  ? pill.width  : Math.round(pill.width*10)/10)  + "mm";
+  const hLabel = (Number.isInteger(pill.height) ? pill.height : Math.round(pill.height*10)/10) + "mm";
+  const hLabelLen = hLabel.length;
+
+  // 회전된(-90도) 세로 텍스트가 차지하는 실제 픽셀 길이를 추정해
+  // 약 높이(hPx)보다 길면 그만큼 캔버스를 키우고, 약 몸체는 세로 중앙(padTop)에 배치
+  const hTextPx = hLabelLen * 13 * 0.62 + 8;
+  const drawH = Math.max(hPx, hTextPx);
+  const padTop = (drawH - hPx) / 2;
+
+  const RW = 30 + hLabelLen * 8;   // 오른쪽 세로치수선 폭 (텍스트 길이 비례)
+  const RH = 36;                    // 아래쪽 가로치수선 높이
 
   const svgW = wPx + RW;
-  const svgH = hPx + RH;
+  const svgH = drawH + RH;
+
+  // 모든 y좌표는 padTop만큼 내려서 그림 — 0 대신 Y0를 기준점으로 사용
+  const Y0 = padTop;
 
   // ── 가로 치수선 (약 아래) ──
-  const RY = hPx + 8;   // 가로선 y
+  const RY = Y0 + hPx + 8;
   const rulerW = (
     <g>
       <line x1={0}   y1={RY} x2={wPx} y2={RY} stroke={accentColor} strokeWidth="1.5"/>
       <line x1={0}   y1={RY-4} x2={0}   y2={RY+4} stroke={accentColor} strokeWidth="1.5"/>
       <line x1={wPx} y1={RY-4} x2={wPx} y2={RY+4} stroke={accentColor} strokeWidth="1.5"/>
       <text x={wPx/2} y={RY+18} textAnchor="middle"
-        fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700">{pill.width}mm</text>
+        fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700">{wLabel}</text>
     </g>
   );
 
   // ── 세로 치수선 (약 오른쪽) ──
-  const RX = wPx + 10;   // 세로선 x
-  const midY = hPx / 2;
+  const RX = wPx + 10;
+  const midY = Y0 + hPx / 2;
   const rulerH = (
     <g>
-      <line x1={RX} y1={0}   x2={RX} y2={hPx} stroke={accentColor} strokeWidth="1.5"/>
-      <line x1={RX-4} y1={0}   x2={RX+4} y2={0}   stroke={accentColor} strokeWidth="1.5"/>
-      <line x1={RX-4} y1={hPx} x2={RX+4} y2={hPx} stroke={accentColor} strokeWidth="1.5"/>
+      <line x1={RX} y1={Y0}   x2={RX} y2={Y0+hPx} stroke={accentColor} strokeWidth="1.5"/>
+      <line x1={RX-4} y1={Y0}   x2={RX+4} y2={Y0}   stroke={accentColor} strokeWidth="1.5"/>
+      <line x1={RX-4} y1={Y0+hPx} x2={RX+4} y2={Y0+hPx} stroke={accentColor} strokeWidth="1.5"/>
       <text
-        x={RX+24} y={midY}
+        x={RX+16} y={midY}
         textAnchor="middle" dominantBaseline="middle"
         fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700"
-        transform={`rotate(-90,${RX+24},${midY})`}
-      >{pill.height}mm</text>
+        transform={`rotate(-90,${RX+16},${midY})`}
+      >{hLabel}</text>
     </g>
   );
 
@@ -195,27 +204,27 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
             <stop offset="50%"  stopColor={pcB}/>
             <stop offset="100%" stopColor={darken(pcB,30)}/>
           </linearGradient>
-          <clipPath id={`${uid}_clipL`}><rect x="0" y="0" width={midX} height={hPx}/></clipPath>
-          <clipPath id={`${uid}_clipR`}><rect x={midX} y="0" width={midX} height={hPx}/></clipPath>
+          <clipPath id={`${uid}_clipL`}><rect x="0" y={Y0} width={midX} height={hPx}/></clipPath>
+          <clipPath id={`${uid}_clipR`}><rect x={midX} y={Y0} width={midX} height={hPx}/></clipPath>
           <filter id={`${uid}_shadow`} x="-20%" y="-20%" width="140%" height="140%">
             <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={pc} floodOpacity="0.4"/>
           </filter>
         </defs>
-        <rect x="0" y="0" width={wPx} height={hPx} rx={rx} ry={rx}
+        <rect x="0" y={Y0} width={wPx} height={hPx} rx={rx} ry={rx}
           fill={`url(#${uid}_capL)`} clipPath={`url(#${uid}_clipL)`}
           stroke={strokeColor} strokeWidth="1.2" filter={`url(#${uid}_shadow)`}/>
-        <rect x="0" y="0" width={wPx} height={hPx} rx={rx} ry={rx}
+        <rect x="0" y={Y0} width={wPx} height={hPx} rx={rx} ry={rx}
           fill={`url(#${uid}_capR)`} clipPath={`url(#${uid}_clipR)`}
           stroke={strokeColor} strokeWidth="1.2"/>
-        <line x1={midX} y1="2" x2={midX} y2={hPx-2} stroke="rgba(0,0,0,0.12)" strokeWidth="1.5"/>
-        <ellipse cx={wPx*0.28} cy={hPx*0.28} rx={wPx*0.14} ry={hPx*0.12}
-          fill="rgba(255,255,255,0.55)" transform={`rotate(-20,${wPx*0.28},${hPx*0.28})`}/>
+        <line x1={midX} y1={Y0+2} x2={midX} y2={Y0+hPx-2} stroke="rgba(0,0,0,0.12)" strokeWidth="1.5"/>
+        <ellipse cx={wPx*0.28} cy={Y0+hPx*0.28} rx={wPx*0.14} ry={hPx*0.12}
+          fill="rgba(255,255,255,0.55)" transform={`rotate(-20,${wPx*0.28},${Y0+hPx*0.28})`}/>
         {pill.markFront && (
-          <text x={wPx*0.25} y={hPx/2+markFontSz*0.35} textAnchor="middle"
+          <text x={wPx*0.25} y={Y0+hPx/2+markFontSz*0.35} textAnchor="middle"
             fontSize={markFontSz} fill={textColor} fontWeight="800" fontFamily="monospace" opacity="0.85">{pill.markFront}</text>
         )}
         {pill.markBack && (
-          <text x={wPx*0.75} y={hPx/2+markFontSz*0.35} textAnchor="middle"
+          <text x={wPx*0.75} y={Y0+hPx/2+markFontSz*0.35} textAnchor="middle"
             fontSize={markFontSz} fill={isLight?"#555":"#fff"} fontWeight="800" fontFamily="monospace" opacity="0.85">{pill.markBack}</text>
         )}
         {rulerW}{rulerH}
@@ -234,23 +243,23 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   } else if (pill.shape === "rectangle") {
     rx = 4; ry = 4;
   } else if (pill.shape === "halfcircle") {
-    shapePath = `M0,${hPx} Q0,0 ${wPx/2},0 Q${wPx},0 ${wPx},${hPx} Z`;
+    shapePath = `M0,${Y0+hPx} Q0,${Y0} ${wPx/2},${Y0} Q${wPx},${Y0} ${wPx},${Y0+hPx} Z`;
   } else if (pill.shape === "diamond") {
-    shapePath = `M${wPx/2},0 L${wPx},${hPx/2} L${wPx/2},${hPx} L0,${hPx/2} Z`;
+    shapePath = `M${wPx/2},${Y0} L${wPx},${Y0+hPx/2} L${wPx/2},${Y0+hPx} L0,${Y0+hPx/2} Z`;
   } else if (pill.shape === "pentagon") {
-    const cx=wPx/2, cy=hPx/2, rr=Math.min(wPx,hPx)/2;
+    const cx=wPx/2, cy=Y0+hPx/2, rr=Math.min(wPx,hPx)/2;
     shapePath = Array.from({length:5},(_,i)=>{
       const a=(i*72-90)*Math.PI/180;
       return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);
     }).join(" ")+"Z";
   } else if (pill.shape === "hexagon") {
-    const cx=wPx/2, cy=hPx/2, rr=Math.min(wPx,hPx)/2;
+    const cx=wPx/2, cy=Y0+hPx/2, rr=Math.min(wPx,hPx)/2;
     shapePath = Array.from({length:6},(_,i)=>{
       const a=(i*60-30)*Math.PI/180;
       return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);
     }).join(" ")+"Z";
   } else if (pill.shape === "triangle") {
-    shapePath = `M${wPx/2},0 L${wPx},${hPx} L0,${hPx} Z`;
+    shapePath = `M${wPx/2},${Y0} L${wPx},${Y0+hPx} L0,${Y0+hPx} Z`;
   } else {
     rx = Math.min(wPx,hPx)*0.15; ry = rx;
   }
@@ -276,14 +285,14 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
         <clipPath id={`${uid}_clip`}>
           {shapePath
             ? <path d={shapePath}/>
-            : <rect x="0" y="0" width={wPx} height={hPx} rx={rx} ry={ry}/>
+            : <rect x="0" y={Y0} width={wPx} height={hPx} rx={rx} ry={ry}/>
           }
         </clipPath>
       </defs>
 
       {/* 약 몸체 */}
       {useRect
-        ? <rect x="0" y="0" width={wPx} height={hPx} rx={rx} ry={ry}
+        ? <rect x="0" y={Y0} width={wPx} height={hPx} rx={rx} ry={ry}
             fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"}
             filter={`url(#${uid}_shadow)`}/>
         : <path d={shapePath}
@@ -293,18 +302,18 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
 
       {/* 테두리 강조 링 */}
       {useRect && (
-        <rect x="-2" y="-2" width={wPx+4} height={hPx+4} rx={rx+2} ry={ry+2}
+        <rect x="-2" y={Y0-2} width={wPx+4} height={hPx+4} rx={rx+2} ry={ry+2}
           fill="none" stroke={accentColor} strokeWidth="1.5" opacity="0.25"/>
       )}
 
       {/* 광택 */}
-      <rect x={wPx*0.08} y={hPx*0.07} width={wPx*0.5} height={hPx*0.28}
+      <rect x={wPx*0.08} y={Y0+hPx*0.07} width={wPx*0.5} height={hPx*0.28}
         rx={Math.min(wPx,hPx)*0.08} fill={`url(#${uid}_shine)`}
         clipPath={`url(#${uid}_clip)`} opacity="0.7"/>
 
       {/* 중앙 분할선 */}
       {(pill.shape === "oblong" || pill.shape === "oval" || pill.shape === "circle") && (
-        <line x1={wPx*0.5} y1={hPx*0.15} x2={wPx*0.5} y2={hPx*0.85}
+        <line x1={wPx*0.5} y1={Y0+hPx*0.15} x2={wPx*0.5} y2={Y0+hPx*0.85}
           stroke="rgba(0,0,0,0.10)" strokeWidth="1.2"
           strokeDasharray={pill.shape==="circle"?"":"3,2"}
           clipPath={`url(#${uid}_clip)`}/>
@@ -312,7 +321,7 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
 
       {/* 식별문자 */}
       {pill.markFront && (
-        <text x={wPx/2} y={hPx/2+markFontSz*0.38} textAnchor="middle"
+        <text x={wPx/2} y={Y0+hPx/2+markFontSz*0.38} textAnchor="middle"
           fontSize={markFontSz} fill={textColor} fontWeight="900" fontFamily="monospace" opacity="0.82"
           clipPath={`url(#${uid}_clip)`}>{pill.markFront}</text>
       )}
