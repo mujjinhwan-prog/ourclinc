@@ -443,13 +443,18 @@ export default function App() {
           .slot-grid{grid-template-columns:repeat(2,1fr) !important;}
         }
         .print-vs{display:none;}
+        .print-only-header{display:none;}
         @media print{
           @page{size:A4 landscape;margin:8mm}
           body *{visibility:hidden;}
-          #printArea,#printArea *,.print-header,.print-header *{visibility:visible;}
-          .print-header{position:relative;box-shadow:none !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-          #printArea{position:relative;left:0;top:0;width:100%;margin-top:8px;}
+          #printArea,#printArea *{visibility:visible;}
+          #printArea{position:relative;left:0;top:0;width:100%;margin-top:0;}
           .no-print{display:none !important;}
+          .print-only-header{display:flex !important;align-items:center;gap:10px;border-bottom:2.5px solid #3b5bdb;padding-bottom:6px;margin-bottom:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+          .print-logo{height:36px;width:auto;max-width:80px;object-fit:contain;flex-shrink:0;}
+          .print-title{font-size:15pt;font-weight:700;color:#1a1f36;}
+          .print-sub{font-size:9pt;color:#64748b;}
+          .print-date{margin-left:auto;font-size:9pt;color:#94a3b8;white-space:nowrap;}
           .print-vs{display:flex !important;align-items:center;justify-content:center;margin:10px 0;gap:10px;}
           .print-vs .line{flex:1;height:3px;background:linear-gradient(90deg,#fff,#3b5bdb,#7048e8);border-radius:99px;}
           .print-vs .line2{flex:1;height:3px;background:linear-gradient(90deg,#7048e8,#3b5bdb,#fff);border-radius:99px;}
@@ -458,8 +463,8 @@ export default function App() {
         }
       `}</style>
 
-      {/* ─── 헤더 (인쇄 시 상단에 포함) ─── */}
-      <div className="print-header" style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 16px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
+      {/* ─── 헤더 (화면 전용, 인쇄는 별도 print-only-header가 담당) ─── */}
+      <div className="no-print" style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 16px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
         <div style={{maxWidth:1400,margin:"0 auto",height:60,display:"flex",alignItems:"center",gap:12}}>
           <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" style={{height:44,width:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.12))"}}/>
           <div style={{width:1,height:28,background:"#e2e8f0",flexShrink:0}}/>
@@ -532,8 +537,8 @@ export default function App() {
 
         {/* ─── 슬롯 그리드: 1~8번(2줄) 항상 모두 표시, 인쇄 시 printArea만 출력 ─── */}
         <div id="printArea">
-          <div className="print-header">
-            <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" onError={e=>{e.target.style.display="none";}}/>
+          <div className="print-only-header">
+            <img className="print-logo" src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" onError={e=>{e.target.style.display="none";}}/>
             <div>
               <div className="print-title">약품 실제 크기 비교표</div>
               <div className="print-sub">식약처 공식 낱알식별 데이터 · Voice of YUHAN · made by mujjinhwan</div>
