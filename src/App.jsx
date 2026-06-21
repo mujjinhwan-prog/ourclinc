@@ -243,13 +243,14 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   if (pill.shape === "circle") {
     rx = wPx/2; ry = hPx/2;
   } else if (pill.shape === "oval" || pill.shape === "oblong") {
-    // 실제 알약은 "타원"보다 위아래 변이 평평하고 양끝만 둥근 스타디움(캡슐) 형태에 가까움.
-    // ry를 짧은 변의 정확히 절반으로 고정해 양끝을 완전한 반원으로 마감.
-    // 식약처 분류명(oval/oblong)이 아니라 실제 가로세로 비율로 캡슐 정도를 판단:
-    // 길쭉할수록(긴변/짧은변이 클수록) 옆면 직선 구간을 넓혀 또렷한 캡슐 윤곽을 만듦.
-    ry = hPx/2;
+    // 실제 알약 사진 실측 결과: 모서리 곡률 반경은 짧은 변(두께 방향)의
+    // 약 27% 수준 — 완전한 반원(50%)이 아니라 위아래/좌우 모두
+    // 모서리만 둥글게 깎인 형태에 더 가까움. (반원으로 하면 실제보다 뾰족해 보임)
+    // 길쭉한 정도(가로세로 비율)에 따라 모서리 곡률을 자연스럽게 조정.
     const aspect = wPx/hPx;
-    rx = aspect >= 1.6 ? Math.min(wPx*0.18, ry) : ry;
+    const cornerRatio = aspect >= 1.6 ? 0.27 : 0.4; // 길쭉할수록 더 또렷한 직선 구간
+    ry = hPx*cornerRatio;
+    rx = Math.min(wPx*cornerRatio, ry*1.3);
   } else if (pill.shape === "rectangle") {
     rx = 4; ry = 4;
   } else if (pill.shape === "halfcircle") {
@@ -567,7 +568,7 @@ export default function App() {
                 const pillBg=pill?.colorCss||null;
                 return(
                   <div key={idx} onClick={()=>clickSlot(idx)}
-                    style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",height:260,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
+                    style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",height:278,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
                     onMouseEnter={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f0f4ff";}}
                     onMouseLeave={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f8fafc";}}>
                     {pill?(
@@ -589,6 +590,7 @@ export default function App() {
                           </div>
                           <span>1cm</span>
                         </div>
+                        <div style={{fontSize:FS.xs,color:color,fontWeight:700,fontFamily:"monospace",textAlign:"center"}}>{pill.width}×{pill.height}{pill.thickness?"×"+pill.thickness:""}mm</div>
                         {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>제조/판매: {pill.entpName}</div>}
                         {/* spacer: 약 이름·제조사 줄 수가 달라도 보험가는 항상 카드 맨 아래로 고정 */}
                         <div style={{flex:1}}/>
