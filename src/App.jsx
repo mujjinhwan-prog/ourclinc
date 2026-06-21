@@ -464,7 +464,6 @@ export default function App() {
           .print-logo{height:36px;width:auto;max-width:80px;object-fit:contain;flex-shrink:0;}
           .print-title{font-size:15pt;font-weight:700;color:#1a1f36;}
           .print-sub{font-size:9pt;color:#64748b;}
-          .print-date{margin-left:auto;font-size:9pt;color:#94a3b8;white-space:nowrap;}
           .print-vs{display:flex !important;align-items:center;justify-content:center;margin:10px 0;gap:10px;}
           .print-vs .line{flex:1;height:3px;background:linear-gradient(90deg,#fff,#3b5bdb,#7048e8);border-radius:99px;}
           .print-vs .line2{flex:1;height:3px;background:linear-gradient(90deg,#7048e8,#3b5bdb,#fff);border-radius:99px;}
@@ -494,18 +493,22 @@ export default function App() {
         }
 
         /* ── 태블릿 가로모드 전용: 8개 슬롯(4+4)이 스크롤 없이 한 화면에 들어오도록 전체적으로 컴팩트하게 ── */
-        @media (min-width:900px) and (max-width:1400px){
-          .app-header-inner{height:48px !important;}
-          .app-logo{height:30px !important;}
-          .app-header-title{font-size:15px !important;}
-          .app-header-sub{font-size:10px !important;}
-          .search-panel{padding:10px !important;margin-bottom:8px !important;}
-          .sbinput input{padding:9px 14px 9px 36px !important;font-size:14px !important;}
-          .btn-s,.btn-r,.btn-p{padding:9px 14px !important;font-size:14px !important;}
-          .control-bar{margin-top:0 !important;}
-          .slot-grid{gap:7px !important;margin-bottom:7px !important;}
-          .slot-card{height:220px !important;padding:10px !important;gap:3px !important;}
-          .pill-shape-box{height:62px !important;}
+        @media (min-width:900px) and (max-width:1400px), (min-width:900px) and (max-height:950px){
+          .app-header-inner{height:42px !important;}
+          .app-logo{height:26px !important;}
+          .app-header-divider{height:22px !important;}
+          .app-header-title{font-size:14px !important;}
+          .app-header-sub{font-size:9px !important;}
+          .app-dpi-badge{font-size:9px !important;padding:2px 6px !important;}
+          .main-content{padding:8px 10px 10px !important;}
+          .search-panel{padding:8px 10px !important;margin-bottom:6px !important;}
+          .sbwrap{margin-bottom:6px !important;}
+          .sbinput input{padding:7px 12px 7px 32px !important;font-size:13px !important;}
+          .btn-s,.btn-r,.btn-p{padding:7px 12px !important;font-size:13px !important;}
+          .control-bar label{padding:6px 10px !important;font-size:12px !important;}
+          .slot-grid{gap:6px !important;margin-bottom:6px !important;}
+          .slot-card{height:190px !important;padding:8px !important;gap:2px !important;}
+          .pill-shape-box{height:52px !important;}
         }
       `}</style>
 
@@ -522,7 +525,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{maxWidth:1400,margin:"0 auto",padding:"14px 12px 60px"}}>
+      <div className="main-content" style={{maxWidth:1400,margin:"0 auto",padding:"14px 12px 60px"}}>
         {/* ─── 검색 패널 (인쇄 시 숨김) ─── */}
         <div className="no-print search-panel" style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
           <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:10,position:"relative",zIndex:200,maxWidth:"50%"}}>
@@ -585,7 +588,6 @@ export default function App() {
               <div className="print-title">약품 실제 크기 비교표</div>
               <div className="print-sub">건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
             </div>
-            <div className="print-date">인쇄일: {new Date().toLocaleDateString("ko-KR")}</div>
           </div>
         {rows.map((row,ri)=>{
           return(
