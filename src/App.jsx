@@ -454,9 +454,11 @@ export default function App() {
         @media print{
           @page{size:A4 landscape;margin:8mm}
           body *{visibility:hidden;}
-          #printArea,#printArea *{visibility:visible;}
+          #printArea,#printArea *{visibility:visible;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
           #printArea{position:relative;left:0;top:0;width:100%;margin-top:0;}
           .no-print{display:none !important;}
+          /* 화면에서 "검색 대상으로 선택된" 슬롯 강조 테두리/그림자는 인쇄에서 제외 */
+          .slot-card{border:1.5px solid #e2e8f0 !important;box-shadow:none !important;background:white !important;}
           .print-only-header{display:flex !important;align-items:center;gap:10px;border-bottom:2.5px solid #3b5bdb;padding-bottom:6px;margin-bottom:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
           .print-logo{height:36px;width:auto;max-width:80px;object-fit:contain;flex-shrink:0;}
           .print-title{font-size:15pt;font-weight:700;color:#1a1f36;}
@@ -567,13 +569,13 @@ export default function App() {
                 const isActive=idx===activeSlot, color=ACCENT[idx];
                 const pillBg=pill?.colorCss||null;
                 return(
-                  <div key={idx} onClick={()=>clickSlot(idx)}
+                  <div key={idx} className="slot-card" onClick={()=>clickSlot(idx)}
                     style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",height:278,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
                     onMouseEnter={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f0f4ff";}}
                     onMouseLeave={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f8fafc";}}>
                     {pill?(
                       <>
-                        <button onClick={e=>removeSlot(e,idx)} style={{position:"absolute",top:8,right:8,background:"none",border:"1px solid #fecaca",borderRadius:4,cursor:"pointer",color:"#dc2626",fontSize:FS.sm,padding:"1px 7px",zIndex:2}}>×</button>
+                        <button className="no-print" onClick={e=>removeSlot(e,idx)} style={{position:"absolute",top:8,right:8,background:"none",border:"1px solid #fecaca",borderRadius:4,cursor:"pointer",color:"#dc2626",fontSize:FS.sm,padding:"1px 7px",zIndex:2}}>×</button>
                         <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4}}>
                           <span style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0,display:"inline-block"}}/>
                           <span style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"keep-all",textAlign:"center"}}>{pill.name}</span>
@@ -584,9 +586,9 @@ export default function App() {
                           </div>
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:4,fontSize:FS.xs,color:"#94a3b8"}}>
-                          <div style={{width:oneCm,height:1.5,background:"#cbd5e1",position:"relative"}}>
-                            <div style={{position:"absolute",left:0,top:-2,width:1.5,height:6,background:"#cbd5e1"}}/>
-                            <div style={{position:"absolute",right:0,top:-2,width:1.5,height:6,background:"#cbd5e1"}}/>
+                          <div style={{width:oneCm,height:1.5,background:"#cbd5e1",position:"relative",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>
+                            <div style={{position:"absolute",left:0,top:-2,width:1.5,height:6,background:"#cbd5e1",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}/>
+                            <div style={{position:"absolute",right:0,top:-2,width:1.5,height:6,background:"#cbd5e1",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}/>
                           </div>
                           <span>1cm</span>
                         </div>
