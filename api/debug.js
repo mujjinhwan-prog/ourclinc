@@ -3,7 +3,7 @@ export default async function handler(req, res) {
   const MFDS_KEY = process.env.MFDS_API_KEY;
   const params = new URLSearchParams({
     serviceKey: MFDS_KEY, item_name: '자디앙듀오',
-    type: 'json', numOfRows: '10', pageNo: '1',
+    type: 'json', numOfRows: '20', pageNo: '1',
   });
   const r = await fetch(
     'https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + params
@@ -14,9 +14,11 @@ export default async function handler(req, res) {
   res.status(200).json(arr.map(it => ({
     ITEM_NAME: it.ITEM_NAME,
     DRUG_SHAPE: it.DRUG_SHAPE,
-    DRUG_SHPE: it.DRUG_SHPE,
+    COLOR_CLASS1: it.COLOR_CLASS1,
+    COLOR_CLASS2: it.COLOR_CLASS2,
     LENG_LONG: it.LENG_LONG,
     LENG_SHORT: it.LENG_SHORT,
     THICK: it.THICK,
+    ITEM_SEQ: it.ITEM_SEQ,
   })));
 }
