@@ -13,7 +13,6 @@ export default async function handler(req, res) {
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
-  // ── 식약처 낱알식별 조회 ──────────────────────────────────────────────────
   async function callMfds(word, rows = 30) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
@@ -49,12 +48,9 @@ export default async function handler(req, res) {
     return m ? m[1].trim() : null;
   }
 
-  // ── HIRA 약가기준정보조회 ──────────────────────────────────────────────────
-  // 수정: 한글단위 → 영문 변환 + 기본 품목명으로 검색 + 3단계 매칭
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
-      // 1) 괄호 제거 후 한글 단위를 영문으로 변환 (HIRA DB는 mg/ml 표기)
       let word = itemName
         .replace(/\(.*?\)/g, '')
         .replace(/밀리그램/g, 'mg')
@@ -65,8 +61,6 @@ export default async function handler(req, res) {
         .replace(/단위/g, 'IU')
         .trim();
 
-      // 2) 숫자·슬래시 이전 기본 품목명만 추출하여 검색
-      //    예: "네시나메트정12.5/1000mg" → "네시나메트정"
       const baseMatch = word.match(/^([가-힣a-zA-Z]+)/);
       const searchWord = baseMatch ? baseMatch[1] : word.substring(0, 6);
 
@@ -90,7 +84,6 @@ export default async function handler(req, res) {
       const items = parseHiraXmlItems(xml);
       if (items.length === 0) { console.log('HIRA price no items for:', searchWord); return null; }
 
-      // 3) 변환된 전체 단어 → 기본명 → 첫 번째 결과 순으로 매칭
       const normWord = word.replace(/\s/g, '');
       const normBase = searchWord.replace(/\s/g, '');
       const best =
