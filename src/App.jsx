@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 
-// ─── 모양 / 색상 매핑 ─────────────────────────────────────────────────────────
 const SHAPE_MAP = {
   "원형":"circle","타원형":"oval","장방형":"oblong","반원형":"halfcircle",
   "사각형":"rectangle","마름모형":"diamond","오각형":"pentagon",
@@ -11,48 +10,32 @@ function parseShape(s) {
   for (const [k,v] of Object.entries(SHAPE_MAP)) if (s.includes(k)) return v;
   return "circle";
 }
-
-// 제형 → 3D 렌더 유형
-function parseFormType(formName, shape) {
+function parseFormType(formName) {
   if (!formName) return "tablet";
   const f = formName.replace(/\s/g, "");
   if (f.includes("캡슐") || f.includes("연질캡슐") || f.includes("경질캡슐")) return "capsule";
   if (f.includes("시럽") || f.includes("액")) return "liquid";
   return "tablet";
 }
-
-// COLOR_MAP: 식약처 API 실제 반환값 기준 (긴 키 먼저 → 짧은 키가 잘못 매칭되는 것 방지)
 const COLOR_MAP = [
-  // 흰색 계열
   ["흰색","#FFFFFF"],["하양","#FFFFFF"],["백색","#FFFFFF"],["흰색(백색)","#FFFFFF"],
-  // 노란색 계열
   ["연노랑","#FFF0A0"],["연노란","#FFF0A0"],["옅은노랑","#FFF8C0"],
   ["노랑","#F5C842"],["노란색","#F5C842"],["황색","#E8B84B"],["노란","#F5C842"],
-  // 주황
   ["주황색","#F47C2F"],["주황","#F47C2F"],["오렌지","#F47C2F"],
-  // 분홍 계열
   ["연분홍","#FBBCD4"],["연한분홍","#FBBCD4"],["살색","#FFCCAA"],["살구색","#FFCCAA"],
   ["분홍색","#F48FB1"],["분홍","#F48FB1"],["핑크","#F48FB1"],
-  // 빨강
   ["빨간색","#E53935"],["빨강","#E53935"],["적색","#E53935"],["붉은","#E53935"],
-  // 파랑 계열
   ["연파랑","#90CAF9"],["연한파랑","#90CAF9"],["하늘색","#87CEEB"],["하늘","#87CEEB"],
   ["파란색","#1E88E5"],["파랑","#1E88E5"],["청색","#1E88E5"],["파란","#1E88E5"],["남색","#1565C0"],
-  // 초록 계열
   ["연두색","#9CCC65"],["연두","#9CCC65"],
   ["초록색","#43A047"],["초록","#43A047"],["녹색","#43A047"],["그린","#43A047"],
-  // 보라 계열
   ["연보라","#CE93D8"],["옅은보라","#CE93D8"],
   ["보라색","#8E24AA"],["보라","#8E24AA"],["자색","#8E24AA"],["자주","#8E24AA"],
-  // 갈색/회색
   ["갈색","#8D6E63"],["밤색","#8D6E63"],
   ["회색","#9E9E9E"],["은색","#C0C0C0"],["은","#C0C0C0"],
-  // 검정 (마지막 — 오매칭 방지)
   ["검정색","#2C2C2C"],["검정","#2C2C2C"],["흑색","#2C2C2C"],["검은색","#2C2C2C"],
-  // 투명
   ["투명","rgba(200,200,200,0.25)"],
 ];
-// 단일 글자 색상 코드 (식약처 API가 간혹 한 글자로 줄여서 반환하는 경우)
 const SINGLE_CHAR_COLOR = {
   "노":"#F5C842","흰":"#FFFFFF","백":"#FFFFFF","분":"#F48FB1","핑":"#F48FB1",
   "빨":"#E53935","적":"#E53935","파":"#1E88E5","청":"#1E88E5","초":"#43A047",
@@ -63,11 +46,8 @@ function parsePillColor(s) {
   if (!s) return null;
   const t = s.trim();
   if (!t) return null;
-  // 완전 일치 먼저
   for (const [k,v] of COLOR_MAP) if (t === k) return v;
-  // 포함 매칭 (긴 키 우선 — 배열 순서로 보장)
   for (const [k,v] of COLOR_MAP) if (t.includes(k)) return v;
-  // 단일/짧은 글자 fallback (API가 "노", "갈" 등으로 줄여 보내는 경우)
   if (SINGLE_CHAR_COLOR[t[0]]) return SINGLE_CHAR_COLOR[t[0]];
   return null;
 }
@@ -111,7 +91,7 @@ async function fetchDrug(query) {
     colorCss:parsePillColor(it.DRUG_COLO||""),
     colorBack:parsePillColor(it.DRUG_COLO_BACK||""),
     formName:it.FORM_CODE_NAME||"",
-    formType:parseFormType(it.FORM_CODE_NAME||"", it.DRUG_SHPE||""),
+    formType:parseFormType(it.FORM_CODE_NAME||""),
     etcOtc:it.ETC_OTC_NAME||"",
     mark:(it.PRINT_FRONT||"")+(it.PRINT_BACK?"/"+it.PRINT_BACK:""),
     markFront:it.PRINT_FRONT||"",
@@ -119,13 +99,9 @@ async function fetchDrug(query) {
     hiraClass:it.HIRA_CLASS||it.CLASS_NAME||"",
     price:it.PRICE||null,
     priceUnit:it.PRICE_UNIT||"정",
-
   }));
 }
 
-// ─── 약제 SVG 렌더러 ──────────────────────────────────────────────────────────
-// X0(좌측), Y0(상단) 패딩으로 약 몸체를 캔버스 중앙에 배치
-// → 가로/세로 치수선 텍스트가 약 자체보다 길어도 잘리지 않음
 function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const wPx = Math.round(pill.width  * pxPerMm);
   const hPx = Math.round(pill.height * pxPerMm);
@@ -139,59 +115,38 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const markFontSz = Math.max(7, Math.min(wPx, hPx) * 0.17);
   const strokeColor = isWhite ? "#bbb" : darken(pc, 20);
   const uid = `pill_${Math.random().toString(36).slice(2)}`;
-
-  // 소수점 정리 — 정수면 그대로, 아니면 소수점 1자리까지만 (예: 8.23 → 8.2)
   const wLabel = (Number.isInteger(pill.width)  ? pill.width  : Math.round(pill.width*10)/10)  + "mm";
   const hLabel = (Number.isInteger(pill.height) ? pill.height : Math.round(pill.height*10)/10) + "mm";
   const wLabelLen = wLabel.length;
   const hLabelLen = hLabel.length;
-
-  // 가로 텍스트(wLabel)가 약 폭(wPx)보다 넓으면 좌우로 삐져나오므로
-  // 그만큼 캔버스 폭을 키우고 약 몸체를 가로 중앙(X0)에 배치
   const wTextPx = wLabelLen * 13 * 0.62 + 8;
   const drawW = Math.max(wPx, wTextPx);
-
-  // 약 몸체 둘레의 그림자/강조 링이 캔버스 밖으로 잘리지 않도록 사방 여백 확보
   const PAD = 6;
   const X0 = (drawW - wPx) / 2 + PAD;
   const Y0 = PAD;
-
-  const RW = 16 + hLabelLen * 9 + PAD;   // 오른쪽 세로치수선 폭 — 가로로 눕힌 텍스트 길이만큼
-  const RH = 36 + PAD;                    // 아래쪽 가로치수선 높이
-
+  const RW = 16 + hLabelLen * 9 + PAD;
+  const RH = 36 + PAD;
   const svgW = drawW + RW + PAD;
   const svgH = hPx + RH + PAD;
-
-  // ── 가로 치수선 (약 아래) ──
   const RY = Y0 + hPx + 8;
   const rulerW = (
     <g>
-      <line x1={X0}      y1={RY} x2={X0+wPx} y2={RY} stroke={accentColor} strokeWidth="1.5"/>
-      <line x1={X0}      y1={RY-4} x2={X0}      y2={RY+4} stroke={accentColor} strokeWidth="1.5"/>
+      <line x1={X0} y1={RY} x2={X0+wPx} y2={RY} stroke={accentColor} strokeWidth="1.5"/>
+      <line x1={X0} y1={RY-4} x2={X0} y2={RY+4} stroke={accentColor} strokeWidth="1.5"/>
       <line x1={X0+wPx} y1={RY-4} x2={X0+wPx} y2={RY+4} stroke={accentColor} strokeWidth="1.5"/>
-      <text x={X0+wPx/2} y={RY+18} textAnchor="middle"
-        fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700">{wLabel}</text>
+      <text x={X0+wPx/2} y={RY+18} textAnchor="middle" fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700">{wLabel}</text>
     </g>
   );
-
-  // ── 세로 치수선 (약 오른쪽) — 회전 텍스트는 작은 크기에서 렌더링이 깨지므로
-  // 가로 텍스트로 눕혀서 표시 (가독성·렌더 안정성 우선)
   const RX = X0 + wPx + 10;
   const midY = Y0 + hPx / 2;
   const rulerH = (
     <g>
-      <line x1={RX} y1={Y0}   x2={RX} y2={Y0+hPx} stroke={accentColor} strokeWidth="1.5"/>
-      <line x1={RX-4} y1={Y0}   x2={RX+4} y2={Y0}   stroke={accentColor} strokeWidth="1.5"/>
+      <line x1={RX} y1={Y0} x2={RX} y2={Y0+hPx} stroke={accentColor} strokeWidth="1.5"/>
+      <line x1={RX-4} y1={Y0} x2={RX+4} y2={Y0} stroke={accentColor} strokeWidth="1.5"/>
       <line x1={RX-4} y1={Y0+hPx} x2={RX+4} y2={Y0+hPx} stroke={accentColor} strokeWidth="1.5"/>
-      <text
-        x={RX+8} y={midY}
-        textAnchor="start" dominantBaseline="middle"
-        fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700"
-      >{hLabel}</text>
+      <text x={RX+8} y={midY} textAnchor="start" dominantBaseline="middle" fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700">{hLabel}</text>
     </g>
   );
-
-  // ── 캡슐 ──
   if (pill.formType === "capsule") {
     const rx = Math.min(wPx, hPx) / 2;
     const midX = X0 + wPx / 2;
@@ -199,14 +154,10 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
       <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} xmlns="http://www.w3.org/2000/svg" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto"}}>
         <defs>
           <linearGradient id={`${uid}_capL`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor={pcL}/>
-            <stop offset="50%"  stopColor={pc}/>
-            <stop offset="100%" stopColor={pcD}/>
+            <stop offset="0%" stopColor={pcL}/><stop offset="50%" stopColor={pc}/><stop offset="100%" stopColor={pcD}/>
           </linearGradient>
           <linearGradient id={`${uid}_capR`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor={lighten(pcB,50)}/>
-            <stop offset="50%"  stopColor={pcB}/>
-            <stop offset="100%" stopColor={darken(pcB,30)}/>
+            <stop offset="0%" stopColor={lighten(pcB,50)}/><stop offset="50%" stopColor={pcB}/><stop offset="100%" stopColor={darken(pcB,30)}/>
           </linearGradient>
           <clipPath id={`${uid}_clipL`}><rect x={X0} y={Y0} width={wPx/2} height={hPx}/></clipPath>
           <clipPath id={`${uid}_clipR`}><rect x={midX} y={Y0} width={wPx/2} height={hPx}/></clipPath>
@@ -214,41 +165,23 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
             <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={pc} floodOpacity="0.4"/>
           </filter>
         </defs>
-        <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={rx}
-          fill={`url(#${uid}_capL)`} clipPath={`url(#${uid}_clipL)`}
-          stroke={strokeColor} strokeWidth="1.2" filter={`url(#${uid}_shadow)`}/>
-        <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={rx}
-          fill={`url(#${uid}_capR)`} clipPath={`url(#${uid}_clipR)`}
-          stroke={strokeColor} strokeWidth="1.2"/>
+        <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={rx} fill={`url(#${uid}_capL)`} clipPath={`url(#${uid}_clipL)`} stroke={strokeColor} strokeWidth="1.2" filter={`url(#${uid}_shadow)`}/>
+        <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={rx} fill={`url(#${uid}_capR)`} clipPath={`url(#${uid}_clipR)`} stroke={strokeColor} strokeWidth="1.2"/>
         <line x1={midX} y1={Y0+2} x2={midX} y2={Y0+hPx-2} stroke="rgba(0,0,0,0.12)" strokeWidth="1.5"/>
-        <ellipse cx={X0+wPx*0.28} cy={Y0+hPx*0.28} rx={wPx*0.14} ry={hPx*0.12}
-          fill="rgba(255,255,255,0.55)" transform={`rotate(-20,${X0+wPx*0.28},${Y0+hPx*0.28})`}/>
-        {pill.markFront && (
-          <text x={X0+wPx*0.25} y={Y0+hPx/2+markFontSz*0.35} textAnchor="middle"
-            fontSize={markFontSz} fill={textColor} fontWeight="800" fontFamily="monospace" opacity="0.85">{pill.markFront}</text>
-        )}
-        {pill.markBack && (
-          <text x={X0+wPx*0.75} y={Y0+hPx/2+markFontSz*0.35} textAnchor="middle"
-            fontSize={markFontSz} fill={isLight?"#555":"#fff"} fontWeight="800" fontFamily="monospace" opacity="0.85">{pill.markBack}</text>
-        )}
+        <ellipse cx={X0+wPx*0.28} cy={Y0+hPx*0.28} rx={wPx*0.14} ry={hPx*0.12} fill="rgba(255,255,255,0.55)" transform={`rotate(-20,${X0+wPx*0.28},${Y0+hPx*0.28})`}/>
+        {pill.markFront && <text x={X0+wPx*0.25} y={Y0+hPx/2+markFontSz*0.35} textAnchor="middle" fontSize={markFontSz} fill={textColor} fontWeight="800" fontFamily="monospace" opacity="0.85">{pill.markFront}</text>}
+        {pill.markBack && <text x={X0+wPx*0.75} y={Y0+hPx/2+markFontSz*0.35} textAnchor="middle" fontSize={markFontSz} fill={isLight?"#555":"#fff"} fontWeight="800" fontFamily="monospace" opacity="0.85">{pill.markBack}</text>}
         {rulerW}{rulerH}
       </svg>
     );
   }
-
-  // ── 정제 / 다각형 ──
   let shapePath = "";
   let rx = 0, ry = 0;
-
   if (pill.shape === "circle") {
     rx = wPx/2; ry = hPx/2;
   } else if (pill.shape === "oval" || pill.shape === "oblong") {
-    // 실제 알약 사진 실측 결과: 모서리 곡률 반경은 짧은 변(두께 방향)의
-    // 약 27% 수준 — 완전한 반원(50%)이 아니라 위아래/좌우 모두
-    // 모서리만 둥글게 깎인 형태에 더 가까움. (반원으로 하면 실제보다 뾰족해 보임)
-    // 길쭉한 정도(가로세로 비율)에 따라 모서리 곡률을 자연스럽게 조정.
     const aspect = wPx/hPx;
-    const cornerRatio = aspect >= 1.6 ? 0.27 : 0.4; // 길쭉할수록 더 또렷한 직선 구간
+    const cornerRatio = aspect >= 1.6 ? 0.27 : 0.4;
     ry = hPx*cornerRatio;
     rx = Math.min(wPx*cornerRatio, ry*1.3);
   } else if (pill.shape === "rectangle") {
@@ -259,84 +192,44 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
     shapePath = `M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx/2} L${X0+wPx/2},${Y0+hPx} L${X0},${Y0+hPx/2} Z`;
   } else if (pill.shape === "pentagon") {
     const cx=X0+wPx/2, cy=Y0+hPx/2, rr=Math.min(wPx,hPx)/2;
-    shapePath = Array.from({length:5},(_,i)=>{
-      const a=(i*72-90)*Math.PI/180;
-      return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);
-    }).join(" ")+"Z";
+    shapePath = Array.from({length:5},(_,i)=>{const a=(i*72-90)*Math.PI/180;return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z";
   } else if (pill.shape === "hexagon") {
     const cx=X0+wPx/2, cy=Y0+hPx/2, rr=Math.min(wPx,hPx)/2;
-    shapePath = Array.from({length:6},(_,i)=>{
-      const a=(i*60-30)*Math.PI/180;
-      return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);
-    }).join(" ")+"Z";
+    shapePath = Array.from({length:6},(_,i)=>{const a=(i*60-30)*Math.PI/180;return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z";
   } else if (pill.shape === "triangle") {
     shapePath = `M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx} L${X0},${Y0+hPx} Z`;
   } else {
     rx = Math.min(wPx,hPx)*0.15; ry = rx;
   }
-
   const useRect = !shapePath;
-
   return (
     <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} xmlns="http://www.w3.org/2000/svg" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto"}}>
       <defs>
         <radialGradient id={`${uid}_rg`} cx="38%" cy="32%" r="65%">
-          <stop offset="0%"   stopColor={pcL}/>
-          <stop offset="55%"  stopColor={pc}/>
-          <stop offset="100%" stopColor={pcD}/>
+          <stop offset="0%" stopColor={pcL}/><stop offset="55%" stopColor={pc}/><stop offset="100%" stopColor={pcD}/>
         </radialGradient>
         <linearGradient id={`${uid}_shine`} x1="0" y1="0" x2="0.3" y2="1">
-          <stop offset="0%"  stopColor="rgba(255,255,255,0.65)"/>
-          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+          <stop offset="0%" stopColor="rgba(255,255,255,0.65)"/><stop offset="100%" stopColor="rgba(255,255,255,0)"/>
         </linearGradient>
         <filter id={`${uid}_shadow`} x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation={isWhite?"3":"4"}
-            floodColor={isWhite?"#aaa":pc} floodOpacity={isWhite?"0.22":"0.42"}/>
+          <feDropShadow dx="0" dy="2" stdDeviation={isWhite?"3":"4"} floodColor={isWhite?"#aaa":pc} floodOpacity={isWhite?"0.22":"0.42"}/>
         </filter>
         <clipPath id={`${uid}_clip`}>
-          {shapePath
-            ? <path d={shapePath}/>
-            : <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry}/>
-          }
+          {shapePath ? <path d={shapePath}/> : <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry}/>}
         </clipPath>
       </defs>
-
-      {/* 약 몸체 */}
       {useRect
-        ? <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry}
-            fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"}
-            filter={`url(#${uid}_shadow)`}/>
-        : <path d={shapePath}
-            fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"}
-            filter={`url(#${uid}_shadow)`}/>
+        ? <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_shadow)`}/>
+        : <path d={shapePath} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_shadow)`}/>
       }
-
-      {/* 테두리 강조 링 */}
-      {useRect && (
-        <rect x={X0-2} y={Y0-2} width={wPx+4} height={hPx+4} rx={rx+2} ry={ry+2}
-          fill="none" stroke={accentColor} strokeWidth="1.5" opacity="0.25"/>
-      )}
-
-      {/* 광택 */}
-      <rect x={X0+wPx*0.08} y={Y0+hPx*0.07} width={wPx*0.5} height={hPx*0.28}
-        rx={Math.min(wPx,hPx)*0.08} fill={`url(#${uid}_shine)`}
-        clipPath={`url(#${uid}_clip)`} opacity="0.7"/>
-
-      {/* 중앙 분할선 */}
+      {useRect && <rect x={X0-2} y={Y0-2} width={wPx+4} height={hPx+4} rx={rx+2} ry={ry+2} fill="none" stroke={accentColor} strokeWidth="1.5" opacity="0.25"/>}
+      <rect x={X0+wPx*0.08} y={Y0+hPx*0.07} width={wPx*0.5} height={hPx*0.28} rx={Math.min(wPx,hPx)*0.08} fill={`url(#${uid}_shine)`} clipPath={`url(#${uid}_clip)`} opacity="0.7"/>
       {(pill.shape === "oblong" || pill.shape === "oval" || pill.shape === "circle") && (
-        <line x1={X0+wPx*0.5} y1={Y0+hPx*0.15} x2={X0+wPx*0.5} y2={Y0+hPx*0.85}
-          stroke="rgba(0,0,0,0.10)" strokeWidth="1.2"
-          strokeDasharray={pill.shape==="circle"?"":"3,2"}
-          clipPath={`url(#${uid}_clip)`}/>
+        <line x1={X0+wPx*0.5} y1={Y0+hPx*0.15} x2={X0+wPx*0.5} y2={Y0+hPx*0.85} stroke="rgba(0,0,0,0.10)" strokeWidth="1.2" strokeDasharray={pill.shape==="circle"?"":"3,2"} clipPath={`url(#${uid}_clip)`}/>
       )}
-
-      {/* 식별문자 */}
       {pill.markFront && (
-        <text x={X0+wPx/2} y={Y0+hPx/2+markFontSz*0.38} textAnchor="middle"
-          fontSize={markFontSz} fill={textColor} fontWeight="900" fontFamily="monospace" opacity="0.82"
-          clipPath={`url(#${uid}_clip)`}>{pill.markFront}</text>
+        <text x={X0+wPx/2} y={Y0+hPx/2+markFontSz*0.38} textAnchor="middle" fontSize={markFontSz} fill={textColor} fontWeight="900" fontFamily="monospace" opacity="0.82" clipPath={`url(#${uid}_clip)`}>{pill.markFront}</text>
       )}
-
       {rulerW}{rulerH}
     </svg>
   );
@@ -355,17 +248,11 @@ export default function App() {
   const [pxPerMm,setPxPerMm]       = useState(3.7795);
   const [dpiInfo,setDpiInfo]       = useState("DPI 측정 중...");
   const [ppiInput,setPpiInput]     = useState("");
+  const [hidePrice,setHidePrice]   = useState(false);
   const debRef=useRef(null), inRef=useRef(null), dropRef=useRef(null);
 
-  // ── 폰트 스케일: 기존 대비 1.5배 ──
   const FS = {
-    xs:  10.5,  // 7  → 10.5
-    sm:  12,    // 8  → 12
-    base:15,    // 10 → 15
-    md:  16.5,  // 11 → 16.5
-    lg:  18,    // 12 → 18
-    xl:  21,    // 14 → 21
-    "2xl":24,   // 16 → 24 (미사용)
+    xs:10.5, sm:12, base:15, md:16.5, lg:18, xl:21, "2xl":24,
   };
 
   useEffect(()=>{
@@ -409,12 +296,7 @@ export default function App() {
   const resetAll=()=>{setSlots(Array(MAX).fill(null));setActiveSlot(0);setQuery("");setResults([]);setShowDrop(false);};
   const applyPPI=()=>{const v=parseInt(ppiInput);if(!v||v<72||v>600)return;
     const ppm=v/25.4;setPxPerMm(ppm);setDpiInfo(v+" PPI (수동) · "+ppm.toFixed(2)+"px/mm");};
-
-  // ── 인쇄: 화면에 보이는 8개 슬롯 카드(#printArea)를 그대로 인쇄, 1~4번/5~8번 사이 VS 구분선 포함 ──
-  const handlePrint=()=>{
-    window.print();
-  };
-
+  const handlePrint=()=>window.print();
 
   const oneCm=pxPerMm*10;
   const filledSlots=slots.map((s,i)=>({pill:s,idx:i})).filter(x=>x.pill);
@@ -427,11 +309,11 @@ export default function App() {
   const tableRows=[
     {label:"구분",render:(p)=>p.etcOtc?<span style={{background:p.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",color:p.etcOtc.includes("전문")?"#dc2626":"#16a34a",padding:"3px 12px",borderRadius:50,fontWeight:700,fontSize:FS.base,whiteSpace:"nowrap"}}>{p.etcOtc.includes("전문")?"전문의약품":"일반의약품"}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
     {label:"제형",render:(p)=>p.formName?<span style={{background:"#eff6ff",color:"#3b5bdb",padding:"3px 12px",borderRadius:50,fontSize:FS.base,fontWeight:600}}>{p.formName}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
-    {label:"제조사/판매사",render:(p)=>(<span style={{fontSize:FS.base,color:"#1a1f36"}}>{p.entpName||"-"}</span>)},
-    {label:"크기",render:(p,idx)=>(<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:ACCENT[idx],whiteSpace:"nowrap"}}>{p.width}×{p.height}{p.thickness?"×"+p.thickness:""}mm</span>)},
+    {label:"제조사",render:(p)=>(<span style={{fontSize:FS.base,color:"#1a1f36"}}>{p.entpName||"-"}</span>)},
+    {label:"크기",render:(p,idx)=>(<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:ACCENT[idx],whiteSpace:"nowrap"}}>{p.width}x{p.height}{p.thickness?"x"+p.thickness:""}mm</span>)},
     {label:"효능군",render:(p)=>p.hiraClass?<span style={{fontSize:FS.base,color:"#64748b",background:"#f1f5f9",padding:"3px 10px",borderRadius:50,whiteSpace:"nowrap"}}>{p.hiraClass}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
     {label:"보험가",render:(p)=>p.price
-      ?<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:"#0ca678",whiteSpace:"nowrap"}}>{Number(p.price).toLocaleString()}원/{p.priceUnit||"정"}</span>
+      ?<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:"#0ca678",whiteSpace:"nowrap"}}>{Number(p.price).toLocaleString()}원 / {p.priceUnit||"정"}</span>
       :<span style={{color:"#94a3b8",fontSize:FS.base}}>미등재</span>
     },
   ];
@@ -443,12 +325,6 @@ export default function App() {
         @keyframes dropIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
         @keyframes spin{to{transform:rotate(360deg)}}
         *{box-sizing:border-box}
-        @media(max-width:640px){
-          .sbwrap{flex-wrap:wrap !important;gap:6px !important;}
-          .sbinput{min-width:100% !important;order:1}
-          .btn-s{order:2;flex:1}.btn-r{order:3;flex:1}.btn-p{order:4;flex:1}
-          .slot-grid{grid-template-columns:repeat(2,1fr) !important;}
-        }
         .print-vs{display:none;}
         .print-only-header{display:none;}
         @media print{
@@ -457,43 +333,39 @@ export default function App() {
           #printArea,#printArea *{visibility:visible;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
           #printArea{position:relative;left:0;top:0;width:100%;margin-top:0;}
           .no-print{display:none !important;}
-          /* 화면에서 "검색 대상으로 선택된" 슬롯 강조 테두리/그림자는 인쇄에서 제외 */
           .slot-card{border:1.5px solid #e2e8f0 !important;box-shadow:none !important;background:white !important;}
-          .print-only-header{display:flex !important;align-items:center;gap:10px;border-bottom:2.5px solid #3b5bdb;padding-bottom:6px;margin-bottom:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+          .print-only-header{display:flex !important;align-items:center;gap:10px;border-bottom:2.5px solid #3b5bdb;padding-bottom:6px;margin-bottom:8px;}
           .print-logo{height:36px;width:auto;max-width:80px;object-fit:contain;flex-shrink:0;}
           .print-title{font-size:15pt;font-weight:700;color:#1a1f36;}
           .print-sub{font-size:9pt;color:#64748b;}
-          .print-date{margin-left:auto;font-size:9pt;color:#94a3b8;white-space:nowrap;}
           .print-vs{display:flex !important;align-items:center;justify-content:center;margin:10px 0;gap:10px;}
           .print-vs .line{flex:1;height:3px;background:linear-gradient(90deg,#fff,#3b5bdb,#7048e8);border-radius:99px;}
           .print-vs .line2{flex:1;height:3px;background:linear-gradient(90deg,#7048e8,#3b5bdb,#fff);border-radius:99px;}
-          .print-vs .badge{background:linear-gradient(135deg,#3b5bdb,#7048e8);color:white;font-weight:900;font-size:14pt;padding:6px 22px;border-radius:8px;letter-spacing:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+          .print-vs .badge{background:linear-gradient(135deg,#3b5bdb,#7048e8);color:white;font-weight:900;font-size:14pt;padding:6px 22px;border-radius:8px;letter-spacing:2px;}
           .slot-grid{break-inside:avoid;grid-template-columns:repeat(4,1fr) !important;}
         }
       `}</style>
 
-      {/* ─── 헤더 (화면 전용, 인쇄는 별도 print-only-header가 담당) ─── */}
       <div className="no-print" style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 16px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
         <div style={{maxWidth:1400,margin:"0 auto",height:60,display:"flex",alignItems:"center",gap:12}}>
-          <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" style={{height:44,width:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.12))"}}/>
+          <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" style={{height:44,width:"auto",objectFit:"contain",flexShrink:0}}/>
           <div style={{width:1,height:28,background:"#e2e8f0",flexShrink:0}}/>
           <div>
             <div style={{fontSize:FS.xl,fontWeight:700,color:"#1a1f36"}}>약품 실제 크기 비교</div>
             <div style={{fontSize:FS.sm,color:"#64748b"}}>건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
           </div>
-          <div className="no-print" style={{marginLeft:"auto",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",fontSize:FS.sm,fontFamily:"monospace",color:"#0ca678",whiteSpace:"nowrap"}}>{dpiInfo}</div>
+          <div style={{marginLeft:"auto",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",fontSize:FS.sm,fontFamily:"monospace",color:"#0ca678",whiteSpace:"nowrap"}}>{dpiInfo}</div>
         </div>
       </div>
 
       <div style={{maxWidth:1400,margin:"0 auto",padding:"14px 12px 60px"}}>
-        {/* ─── 검색 패널 (인쇄 시 숨김) ─── */}
         <div className="no-print" style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
-          <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:12,position:"relative",zIndex:200}}>
-            <div className="sbinput" style={{flex:1,position:"relative",minWidth:0}} ref={inRef}>
+          <div style={{display:"flex",gap:8,marginBottom:10,position:"relative",zIndex:200,maxWidth:"50%"}}>
+            <div style={{flex:1,position:"relative",minWidth:0}} ref={inRef}>
               <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:FS.lg,pointerEvents:"none",color:"#94a3b8"}}>🔍</span>
               <input value={query} onChange={handleInput} onKeyDown={handleKey}
                 placeholder="약품명 입력 (예: 자디앙, 트라젠타, 트윈스타...)"
-                style={{width:"100%",padding:"13px 16px 13px 42px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:FS.xl,fontFamily:"inherit",color:"#1a1f36",background:"#f8fafc",outline:"none",transition:"all 0.2s"}}
+                style={{width:"100%",padding:"13px 16px 13px 42px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:FS.xl,fontFamily:"inherit",color:"#1a1f36",background:"#f8fafc",outline:"none"}}
                 onFocus={e=>{e.target.style.borderColor="#3b5bdb";e.target.style.boxShadow="0 0 0 3px rgba(59,91,219,0.12)";if(results.length)setShowDrop(true);}}
                 onBlur={e=>{e.target.style.borderColor="#e2e8f0";e.target.style.boxShadow="none";}}/>
               {showDrop&&(
@@ -506,10 +378,10 @@ export default function App() {
                     const shapeR=r.shape==="circle"?"50%":r.shape==="oblong"?"30%":"40%";
                     return(
                       <div key={r.id} onClick={()=>!already&&pick(r)}
-                        style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f1f5f9",cursor:already?"not-allowed":"pointer",opacity:already?0.45:1,background:"white",transition:"background 0.12s"}}
+                        style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f1f5f9",cursor:already?"not-allowed":"pointer",opacity:already?0.45:1,background:"white"}}
                         onMouseEnter={e=>{if(!already)e.currentTarget.style.background="#eff6ff";}}
                         onMouseLeave={e=>{e.currentTarget.style.background="white";}}>
-                        <div style={{width:r.shape==="oblong"?34:20,height:18,borderRadius:shapeR,flexShrink:0,background:pillBg,border:"1px solid #ccc",boxShadow:"0 1px 3px rgba(0,0,0,0.12)"}}/>
+                        <div style={{width:r.shape==="oblong"?34:20,height:18,borderRadius:shapeR,flexShrink:0,background:pillBg,border:"1px solid #ccc"}}/>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:FS.lg,fontWeight:600,color:"#1a1f36",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}{already?" ✓":""}</div>
                           <div style={{fontSize:FS.base,color:"#94a3b8",marginTop:2,display:"flex",gap:5,flexWrap:"wrap"}}>
@@ -524,13 +396,9 @@ export default function App() {
                 </div>
               )}
             </div>
-            <button className="btn-s" onClick={()=>doSearch(query)} style={{padding:"13px 20px",background:"linear-gradient(135deg,#3b5bdb,#7048e8)",border:"none",borderRadius:10,color:"white",fontSize:FS.xl,fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(59,91,219,0.28)"}}>검색</button>
-            <button className="btn-r" onClick={resetAll} style={{padding:"13px 16px",background:hasAny?"#fee2e2":"#f1f5f9",border:"1.5px solid "+(hasAny?"#fecaca":"#e2e8f0"),borderRadius:10,color:hasAny?"#dc2626":"#94a3b8",fontSize:FS.xl,fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.2s"}}>🔄 초기화</button>
-            <button className="btn-p" onClick={handlePrint} disabled={!hasAny} style={{padding:"13px 16px",background:hasAny?"linear-gradient(135deg,#0ca678,#2f9e44)":"#f1f5f9",border:"1.5px solid "+(hasAny?"#0ca678":"#e2e8f0"),borderRadius:10,color:hasAny?"white":"#94a3b8",fontSize:FS.xl,fontWeight:700,fontFamily:"inherit",cursor:hasAny?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s",boxShadow:hasAny?"0 2px 10px rgba(12,166,120,0.3)":"none"}}>🖨️ 인쇄</button>
+            <button onClick={()=>doSearch(query)} style={{padding:"13px 20px",background:"linear-gradient(135deg,#3b5bdb,#7048e8)",border:"none",borderRadius:10,color:"white",fontSize:FS.xl,fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>검색</button>
           </div>
-
-          {/* PPI 패널 */}
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <div style={{fontSize:FS.base,color:"#64748b",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 12px",display:"flex",alignItems:"center",gap:7}}>
               <span style={{width:10,height:10,borderRadius:"50%",background:ACCENT[activeSlot],display:"inline-block"}}/>
               <span><b style={{color:ACCENT[activeSlot]}}>슬롯 {activeSlot+1}</b> 활성 · 슬롯 클릭으로 변경</span>
@@ -541,10 +409,15 @@ export default function App() {
               <button onClick={applyPPI} style={{padding:"3px 10px",background:"#3b5bdb",border:"none",borderRadius:5,color:"white",fontSize:FS.sm,cursor:"pointer",fontFamily:"inherit"}}>적용</button>
               <span style={{fontSize:FS.sm,color:"#6366f1"}}>아이폰15:460 / 갤S24:416</span>
             </div>
+            <button onClick={resetAll} style={{padding:"10px 16px",background:hasAny?"#fee2e2":"#f1f5f9",border:"1.5px solid "+(hasAny?"#fecaca":"#e2e8f0"),borderRadius:10,color:hasAny?"#dc2626":"#94a3b8",fontSize:FS.lg,fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>🔄 초기화</button>
+            <button onClick={handlePrint} disabled={!hasAny} style={{padding:"10px 16px",background:hasAny?"linear-gradient(135deg,#0ca678,#2f9e44)":"#f1f5f9",border:"1.5px solid "+(hasAny?"#0ca678":"#e2e8f0"),borderRadius:10,color:hasAny?"white":"#94a3b8",fontSize:FS.lg,fontWeight:700,fontFamily:"inherit",cursor:hasAny?"pointer":"not-allowed",whiteSpace:"nowrap"}}>🖨️ 인쇄</button>
+            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:FS.base,color:"#64748b",cursor:"pointer",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px"}}>
+              <input type="checkbox" checked={hidePrice} onChange={e=>setHidePrice(e.target.checked)} style={{width:16,height:16,cursor:"pointer",accentColor:"#3b5bdb"}}/>
+              약가제외
+            </label>
           </div>
         </div>
 
-        {/* ─── 슬롯 그리드: 1~8번(2줄) 항상 모두 표시, 인쇄 시 printArea만 출력 ─── */}
         <div id="printArea">
           <div className="print-only-header">
             <img className="print-logo" src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" onError={e=>{e.target.style.display="none";}}/>
@@ -552,79 +425,71 @@ export default function App() {
               <div className="print-title">약품 실제 크기 비교표</div>
               <div className="print-sub">건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
             </div>
-            <div className="print-date">인쇄일: {new Date().toLocaleDateString("ko-KR")}</div>
           </div>
-        {rows.map((row,ri)=>{
-          return(
+          {rows.map((row,ri)=>(
             <Fragment key={ri}>
-            {ri===1&&(
-              <div className="print-vs">
-                <div className="line"/>
-                <div className="badge">VS</div>
-                <div className="line2"/>
-              </div>
-            )}
-            <div className="slot-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-              {row.map(({pill,idx})=>{
-                const isActive=idx===activeSlot, color=ACCENT[idx];
-                const pillBg=pill?.colorCss||null;
-                return(
-                  <div key={idx} className="slot-card" onClick={()=>clickSlot(idx)}
-                    style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",height:278,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
-                    onMouseEnter={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f0f4ff";}}
-                    onMouseLeave={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f8fafc";}}>
-                    {pill?(
-                      <>
-                        <button className="no-print" onClick={e=>removeSlot(e,idx)} style={{position:"absolute",top:8,right:8,background:"none",border:"1px solid #fecaca",borderRadius:4,cursor:"pointer",color:"#dc2626",fontSize:FS.sm,padding:"1px 7px",zIndex:2}}>×</button>
-                        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4}}>
-                          <span style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0,display:"inline-block"}}/>
-                          <span style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"keep-all",textAlign:"center"}}>{pill.name}</span>
-                        </div>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:90,overflow:"hidden"}}>
-                          <div style={{maxWidth:"100%",maxHeight:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {ri===1&&(
+                <div className="print-vs">
+                  <div className="line"/>
+                  <div className="badge">VS</div>
+                  <div className="line2"/>
+                </div>
+              )}
+              <div className="slot-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+                {row.map(({pill,idx})=>{
+                  const isActive=idx===activeSlot, color=ACCENT[idx];
+                  return(
+                    <div key={idx} className="slot-card" onClick={()=>clickSlot(idx)}
+                      style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",height:278,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
+                      onMouseEnter={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f0f4ff";}}
+                      onMouseLeave={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f8fafc";}}>
+                      {pill?(
+                        <>
+                          <button className="no-print" onClick={e=>removeSlot(e,idx)} style={{position:"absolute",top:8,right:8,background:"none",border:"1px solid #fecaca",borderRadius:4,cursor:"pointer",color:"#dc2626",fontSize:FS.sm,padding:"1px 7px",zIndex:2}}>×</button>
+                          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4}}>
+                            <span style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0,display:"inline-block"}}/>
+                            <span style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"keep-all",textAlign:"center"}}>{pill.name}</span>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:90,overflow:"hidden"}}>
                             <PillShapeEl pill={pill} pxPerMm={pxPerMm} accentColor={color}/>
                           </div>
-                        </div>
-                        <div style={{display:"flex",alignItems:"center",gap:4,fontSize:FS.xs,color:"#94a3b8"}}>
-                          <div style={{width:oneCm,height:1.5,background:"#cbd5e1",position:"relative",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>
-                            <div style={{position:"absolute",left:0,top:-2,width:1.5,height:6,background:"#cbd5e1",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}/>
-                            <div style={{position:"absolute",right:0,top:-2,width:1.5,height:6,background:"#cbd5e1",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}/>
-                          </div>
-                          <span>1cm</span>
-                        </div>
-                        <div style={{fontSize:FS.xs,color:color,fontWeight:700,fontFamily:"monospace",textAlign:"center"}}>{pill.width}×{pill.height}{pill.thickness?"×"+pill.thickness:""}mm</div>
-                        {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>제조/판매: {pill.entpName}</div>}
-                        {/* spacer: 약 이름·제조사 줄 수가 달라도 보험가는 항상 카드 맨 아래로 고정 */}
-                        <div style={{flex:1}}/>
-                        {/* 보험가 슬롯 표시 — 가독성을 위해 기존 대비 2배 크기, 모든 카드 동일 높이로 하단 정렬 */}
-                        {pill.price
-                          ? <div style={{fontSize:FS.xs*2,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"3px 10px",flexShrink:0}}>
-                              💊 {Number(pill.price).toLocaleString()}원/{pill.priceUnit||"정"}
+                          <div style={{display:"flex",alignItems:"center",gap:4,fontSize:FS.xs,color:"#94a3b8"}}>
+                            <div style={{width:oneCm,height:1.5,background:"#cbd5e1",position:"relative"}}>
+                              <div style={{position:"absolute",left:0,top:-2,width:1.5,height:6,background:"#cbd5e1"}}/>
+                              <div style={{position:"absolute",right:0,top:-2,width:1.5,height:6,background:"#cbd5e1"}}/>
                             </div>
-                          : <div style={{fontSize:FS.xs*2,color:"#94a3b8",flexShrink:0}}>보험가 미등재</div>
-                        }
-                      </>
-                    ):(
-                      <>
-                        <div className="no-print" style={{fontSize:FS["2xl"]+8,fontWeight:800,color:isActive?color:"#cbd5e1"}}>{idx+1}</div>
-                        <div className="no-print" style={{fontSize:FS.base,color:isActive?color:"#94a3b8",textAlign:"center",lineHeight:1.5}}>{isActive?"← 검색 후 선택":"클릭하여 선택"}</div>
-                      </>
-                    )}
-                  </div>);
-              })}
-            </div>
-            </Fragment>);
-        })}
+                            <span>1cm</span>
+                          </div>
+                          <div style={{fontSize:FS.xs,color:color,fontWeight:700,fontFamily:"monospace",textAlign:"center"}}>{pill.width}x{pill.height}{pill.thickness?"x"+pill.thickness:""}mm</div>
+                          {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>제조/판매: {pill.entpName}</div>}
+                          <div style={{flex:1}}/>
+                          {!hidePrice&&(pill.price
+                            ?<div style={{fontSize:FS.xs*2,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"3px 10px",flexShrink:0}}>
+                              {"💊 "+Number(pill.price).toLocaleString()+"원 / "+(pill.priceUnit||"정")}
+                            </div>
+                            :<div style={{fontSize:FS.xs*2,color:"#94a3b8",flexShrink:0}}>보험가 미등재</div>
+                          )}
+                        </>
+                      ):(
+                        <>
+                          <div className="no-print" style={{fontSize:FS["2xl"]+8,fontWeight:800,color:isActive?color:"#cbd5e1"}}>{idx+1}</div>
+                          <div className="no-print" style={{fontSize:FS.base,color:isActive?color:"#94a3b8",textAlign:"center",lineHeight:1.5}}>{isActive?"← 검색 후 선택":"클릭하여 선택"}</div>
+                        </>
+                      )}
+                    </div>);
+                })}
+              </div>
+            </Fragment>
+          ))}
         </div>
 
-        {/* ─── 정보 테이블 ─── */}
         {hasAny&&(
           <div style={{background:"white",borderRadius:16,overflow:"hidden",boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
             <div style={{padding:"13px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{fontSize:FS.base,fontFamily:"monospace",color:"#3b5bdb",display:"flex",alignItems:"center",gap:7}}><span style={{width:7,height:7,background:"#3b5bdb",borderRadius:"50%",display:"inline-block"}}/>약품 정보</div>
               <div style={{fontSize:FS.base,color:"#64748b"}}>{filledSlots.length}개</div>
             </div>
-            <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+            <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"auto"}}>
                 <thead><tr>
                   <th style={{background:"#f8fafc",minWidth:84,padding:"10px",fontSize:FS.base,fontWeight:700,color:"#64748b",borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",textAlign:"left"}}></th>
@@ -638,7 +503,7 @@ export default function App() {
                   ))}
                 </tr></thead>
                 <tbody>
-                  {tableRows.map(({label,render})=>(
+                  {tableRows.filter(r=>!(hidePrice&&r.label==="보험가")).map(({label,render})=>(
                     <tr key={label}>
                       <th style={{background:"#f8fafc",padding:"10px",fontSize:FS.base,fontWeight:700,color:"#64748b",borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",textAlign:"left",whiteSpace:"nowrap",verticalAlign:"middle"}}>{label}</th>
                       {filledSlots.map(({pill,idx})=>(
@@ -652,7 +517,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ─── 빈 상태 ─── */}
         {!hasAny&&(
           <div style={{background:"white",borderRadius:16,padding:"48px 20px",boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3",display:"flex",flexDirection:"column",alignItems:"center",gap:12,color:"#94a3b8"}}>
             <div style={{fontSize:48,opacity:0.2}}>🔬</div>
