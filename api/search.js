@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
-  // ── 식약처 낱알식별 조회 ─────────────────────────────────────────────────────
+  // ── 식약처 낱알식별 조회 ──────────────────────────────────────────────────
   async function callMfds(word, rows = 30) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
@@ -31,14 +31,10 @@ export default async function handler(req, res) {
     return [];
   }
 
-  // 간단한 XML → 객체 배열 파서 (<item>...</item> 반복 구조 전용)
-  // HIRA API가 type=json을 줘도 XML로만 응답하므로 직접 파싱
   function parseHiraXmlItems(xml) {
     const items = [];
     const itemBlocks = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
     for (const blockFull of itemBlocks) {
-      // <item> 바깥 태그 자체를 제거하고 내부 필드 태그만 남겨서 파싱
-      // (제거 안 하면 정규식이 <item>...</item> 전체를 하나의 필드로 잘못 매칭함)
       const inner = blockFull.replace(/^<item>/, '').replace(/<\/item>$/, '');
       const obj = {};
       const fieldMatches = inner.matchAll(/<(\w+)>([\s\S]*?)<\/\1>/g);
@@ -47,21 +43,37 @@ export default async function handler(req, res) {
     }
     return items;
   }
+
   function getXmlTag(xml, tag) {
-    const m = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
+    const m = xml.match(new RegExp('<' + tag + '>([\\s\\S]*?)<\/' + tag + '>'));
     return m ? m[1].trim() : null;
   }
 
-  // ── HIRA 약가기준정보조회서비스: 품목명으로 상한금액(mxCprc) 조회 ───────────
-  // https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList (응답 XML 고정)
+  // ── HIRA 약가기준정보조회 ──────────────────────────────────────────────────
+  // 수정: 한글단위 → 영문 변환 + 기본 품목명으로 검색 + 3단계 매칭
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
-      const word = itemName.replace(/\(.*?\)/g, '').trim();
+      // 1) 괄호 제거 후 한글 단위를 영문으로 변환 (HIRA DB는 mg/ml 표기)
+      let word = itemName
+        .replace(/\(.*?\)/g, '')
+        .replace(/밀리그램/g, 'mg')
+        .replace(/마이크로그램/g, 'mcg')
+        .replace(/밀리리터/g, 'ml')
+        .replace(/리터/g, 'L')
+        .replace(/그램/g, 'g')
+        .replace(/단위/g, 'IU')
+        .trim();
+
+      // 2) 숫자·슬래시 이전 기본 품목명만 추출하여 검색
+      //    예: "네시나메트정12.5/1000mg" → "네시나메트정"
+      const baseMatch = word.match(/^([가-힣a-zA-Z]+)/);
+      const searchWord = baseMatch ? baseMatch[1] : word.substring(0, 6);
+
       const params = new URLSearchParams({
         serviceKey: HIRA_KEY,
-        itmNm: word,
-        numOfRows: '10',
+        itmNm: searchWord,
+        numOfRows: '20',
         pageNo: '1',
       });
       const url = 'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params;
@@ -76,17 +88,22 @@ export default async function handler(req, res) {
       }
 
       const items = parseHiraXmlItems(xml);
-      if (items.length === 0) { console.log('HIRA price no items for:', word); return null; }
+      if (items.length === 0) { console.log('HIRA price no items for:', searchWord); return null; }
 
-      const keyword = word.replace(/\s/g, '');
-      const best = items.find(it => (it.itmNm || '').replace(/\s/g, '').includes(keyword)) || items[0];
+      // 3) 변환된 전체 단어 → 기본명 → 첫 번째 결과 순으로 매칭
+      const normWord = word.replace(/\s/g, '');
+      const normBase = searchWord.replace(/\s/g, '');
+      const best =
+        items.find(it => (it.itmNm || '').replace(/\s/g, '').includes(normWord)) ||
+        items.find(it => (it.itmNm || '').replace(/\s/g, '').includes(normBase)) ||
+        items[0];
 
       const priceRaw = best.mxCprc;
       if (priceRaw === undefined || priceRaw === null || priceRaw === '') return null;
       const price = parseFloat(String(priceRaw).replace(/,/g, ''));
       if (isNaN(price) || price <= 0) return null;
 
-      console.log(`HIRA price "${itemName}" -> ${best.itmNm}: ${price} ${best.unit || '정'}`);
+      console.log('HIRA price "' + itemName + '" -> ' + best.itmNm + ': ' + price + ' ' + (best.unit || '정'));
       return { price, unit: best.unit || '정' };
     } catch (e) {
       console.error('callHiraPrice error:', e.message);
@@ -150,7 +167,6 @@ export default async function handler(req, res) {
 
     let mfdsResult = filtered.map(normalize);
 
-    // ── HIRA 보험가(상한금액) 조회 (동일 약품명 중복 캐시) ─────────────────────
     if (mfdsResult.length > 0 && HIRA_KEY) {
       const priceCache = new Map();
       mfdsResult = await Promise.all(mfdsResult.map(async it => {
@@ -177,7 +193,6 @@ export default async function handler(req, res) {
 
     if (mfdsResult.length > 0) return res.status(200).json(mfdsResult);
 
-    // ── AI 낱알식별 보완 ───────────────────────────────────────────────────────
     if (!AI_KEY) return res.status(200).json([]);
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -192,9 +207,7 @@ export default async function handler(req, res) {
         system: 'Korean pharmaceutical database. Return ONLY JSON array. No markdown.',
         messages: [{
           role: 'user',
-          content: q + ` 약품 낱알식별 JSON 배열.
-[{"ITEM_NAME":"품목명","DRUG_SHPE":"원형","DRUG_COLO":"분홍","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","PRICE":null,"PRICE_UNIT":"정"}]
-없으면[].`
+          content: q + ' 약품 낱알식별 JSON 배열.\n[{"ITEM_NAME":"품목명","DRUG_SHPE":"원형","DRUG_COLO":"분홍","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","PRICE":null,"PRICE_UNIT":"정"}]\n없으면[].'
         }]
       })
     });
