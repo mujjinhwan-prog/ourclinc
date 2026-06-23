@@ -355,7 +355,6 @@ export default function App() {
   const [pxPerMm,setPxPerMm]       = useState(3.7795);
   const [dpiInfo,setDpiInfo]       = useState("DPI 측정 중...");
   const [ppiInput,setPpiInput]     = useState("");
-  const [hidePrice,setHidePrice]   = useState(false);  // 약가제외: 체크 시 화면·인쇄 모두에서 보험가 숨김
   const debRef=useRef(null), inRef=useRef(null), dropRef=useRef(null);
 
   // ── 폰트 스케일: 기존 대비 1.5배 ──
@@ -464,71 +463,32 @@ export default function App() {
           .print-logo{height:36px;width:auto;max-width:80px;object-fit:contain;flex-shrink:0;}
           .print-title{font-size:15pt;font-weight:700;color:#1a1f36;}
           .print-sub{font-size:9pt;color:#64748b;}
+          .print-date{margin-left:auto;font-size:9pt;color:#94a3b8;white-space:nowrap;}
           .print-vs{display:flex !important;align-items:center;justify-content:center;margin:10px 0;gap:10px;}
           .print-vs .line{flex:1;height:3px;background:linear-gradient(90deg,#fff,#3b5bdb,#7048e8);border-radius:99px;}
           .print-vs .line2{flex:1;height:3px;background:linear-gradient(90deg,#7048e8,#3b5bdb,#fff);border-radius:99px;}
           .print-vs .badge{background:linear-gradient(135deg,#3b5bdb,#7048e8);color:white;font-weight:900;font-size:14pt;padding:6px 22px;border-radius:8px;letter-spacing:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
           .slot-grid{break-inside:avoid;grid-template-columns:repeat(4,1fr) !important;}
         }
-
-        /* ── 모바일 전용 스타일: PC 화면(인라인 스타일)은 전혀 건드리지 않음 ── */
-        @media (max-width: 768px){
-          /* 헤더: 부제목이 길어 줄바꿈될 수 있으므로 고정 높이를 해제하고 자연스럽게 정렬 */
-          .app-header-inner{height:auto !important;min-height:52px;padding:8px 0;flex-wrap:wrap;gap:8px !important;}
-          .app-logo{height:32px !important;}
-          .app-header-divider{display:none;}
-          .app-header-text{flex:1 1 auto;}
-          .app-header-title{font-size:14px !important;line-height:1.3;}
-          .app-header-sub{font-size:10px !important;line-height:1.4;word-break:keep-all;}
-          .app-dpi-badge{font-size:10px !important;padding:3px 7px !important;}
-
-          /* 검색창/버튼: 아담하게 축소. 좁은 화면에선 검색창 폭 제한을 풀어 줄바꿈 없이 사용 */
-          .sbwrap{gap:5px !important;max-width:100% !important;}
-          .sbinput input{padding:9px 12px 9px 34px !important;font-size:14px !important;}
-          .btn-s,.btn-r,.btn-p{padding:9px 11px !important;font-size:13px !important;}
-          .control-bar{gap:5px !important;}
-
-          /* 슬롯 카드 그리드: 2열로 줄여서 카드 자체(약 크기/정보)는 충분히 크게 유지 */
-          .slot-grid{grid-template-columns:repeat(2,1fr) !important;gap:8px !important;}
-        }
-
-        /* ── 태블릿 가로모드 전용: 8개 슬롯(4+4)이 스크롤 없이 한 화면에 들어오도록 전체적으로 컴팩트하게 ── */
-        @media (min-width:900px) and (max-width:1400px), (min-width:900px) and (max-height:950px){
-          .app-header-inner{height:42px !important;}
-          .app-logo{height:26px !important;}
-          .app-header-divider{height:22px !important;}
-          .app-header-title{font-size:14px !important;}
-          .app-header-sub{font-size:9px !important;}
-          .app-dpi-badge{font-size:9px !important;padding:2px 6px !important;}
-          .main-content{padding:8px 10px 10px !important;}
-          .search-panel{padding:8px 10px !important;margin-bottom:6px !important;}
-          .sbwrap{margin-bottom:6px !important;}
-          .sbinput input{padding:7px 12px 7px 32px !important;font-size:13px !important;}
-          .btn-s,.btn-r,.btn-p{padding:7px 12px !important;font-size:13px !important;}
-          .control-bar label{padding:6px 10px !important;font-size:12px !important;}
-          .slot-grid{gap:6px !important;margin-bottom:6px !important;}
-          .slot-card{height:190px !important;padding:8px !important;gap:2px !important;}
-          .pill-shape-box{height:52px !important;}
-        }
       `}</style>
 
       {/* ─── 헤더 (화면 전용, 인쇄는 별도 print-only-header가 담당) ─── */}
-      <div className="no-print app-header" style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 16px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
-        <div className="app-header-inner" style={{maxWidth:1400,margin:"0 auto",height:60,display:"flex",alignItems:"center",gap:12}}>
-          <img className="app-logo" src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" style={{height:44,width:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.12))"}}/>
-          <div className="app-header-divider" style={{width:1,height:28,background:"#e2e8f0",flexShrink:0}}/>
-          <div className="app-header-text" style={{minWidth:0}}>
-            <div className="app-header-title" style={{fontSize:FS.xl,fontWeight:700,color:"#1a1f36"}}>약품 실제 크기 비교</div>
-            <div className="app-header-sub" style={{fontSize:FS.sm,color:"#64748b"}}>건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
+      <div className="no-print" style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 16px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
+        <div style={{maxWidth:1400,margin:"0 auto",height:60,display:"flex",alignItems:"center",gap:12}}>
+          <img src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" style={{height:44,width:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.12))"}}/>
+          <div style={{width:1,height:28,background:"#e2e8f0",flexShrink:0}}/>
+          <div>
+            <div style={{fontSize:FS.xl,fontWeight:700,color:"#1a1f36"}}>약품 실제 크기 비교</div>
+            <div style={{fontSize:FS.sm,color:"#64748b"}}>건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
           </div>
-          <div className="no-print app-dpi-badge" style={{marginLeft:"auto",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",fontSize:FS.sm,fontFamily:"monospace",color:"#0ca678",whiteSpace:"nowrap"}}>{dpiInfo}</div>
+          <div className="no-print" style={{marginLeft:"auto",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",fontSize:FS.sm,fontFamily:"monospace",color:"#0ca678",whiteSpace:"nowrap"}}>{dpiInfo}</div>
         </div>
       </div>
 
-      <div className="main-content" style={{maxWidth:1400,margin:"0 auto",padding:"14px 12px 60px"}}>
+      <div style={{maxWidth:1400,margin:"0 auto",padding:"14px 12px 60px"}}>
         {/* ─── 검색 패널 (인쇄 시 숨김) ─── */}
-        <div className="no-print search-panel" style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
-          <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:10,position:"relative",zIndex:200,maxWidth:"50%"}}>
+        <div className="no-print" style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
+          <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:12,position:"relative",zIndex:200}}>
             <div className="sbinput" style={{flex:1,position:"relative",minWidth:0}} ref={inRef}>
               <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:FS.lg,pointerEvents:"none",color:"#94a3b8"}}>🔍</span>
               <input value={query} onChange={handleInput} onKeyDown={handleKey}
@@ -565,19 +525,23 @@ export default function App() {
               )}
             </div>
             <button className="btn-s" onClick={()=>doSearch(query)} style={{padding:"13px 20px",background:"linear-gradient(135deg,#3b5bdb,#7048e8)",border:"none",borderRadius:10,color:"white",fontSize:FS.xl,fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(59,91,219,0.28)"}}>검색</button>
+            <button className="btn-r" onClick={resetAll} style={{padding:"13px 16px",background:hasAny?"#fee2e2":"#f1f5f9",border:"1.5px solid "+(hasAny?"#fecaca":"#e2e8f0"),borderRadius:10,color:hasAny?"#dc2626":"#94a3b8",fontSize:FS.xl,fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.2s"}}>🔄 초기화</button>
+            <button className="btn-p" onClick={handlePrint} disabled={!hasAny} style={{padding:"13px 16px",background:hasAny?"linear-gradient(135deg,#0ca678,#2f9e44)":"#f1f5f9",border:"1.5px solid "+(hasAny?"#0ca678":"#e2e8f0"),borderRadius:10,color:hasAny?"white":"#94a3b8",fontSize:FS.xl,fontWeight:700,fontFamily:"inherit",cursor:hasAny?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s",boxShadow:hasAny?"0 2px 10px rgba(12,166,120,0.3)":"none"}}>🖨️ 인쇄</button>
           </div>
 
-          {/* ─── 컨트롤 바: 초기화 · 인쇄 · 약가제외 체크박스 한 줄 정리 ─── */}
-          <div className="control-bar" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <button className="btn-r" onClick={resetAll} style={{padding:"10px 16px",background:hasAny?"#fee2e2":"#f1f5f9",border:"1.5px solid "+(hasAny?"#fecaca":"#e2e8f0"),borderRadius:10,color:hasAny?"#dc2626":"#94a3b8",fontSize:FS.lg,fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.2s"}}>🔄 초기화</button>
-            <button className="btn-p" onClick={handlePrint} disabled={!hasAny} style={{padding:"10px 16px",background:hasAny?"linear-gradient(135deg,#0ca678,#2f9e44)":"#f1f5f9",border:"1.5px solid "+(hasAny?"#0ca678":"#e2e8f0"),borderRadius:10,color:hasAny?"white":"#94a3b8",fontSize:FS.lg,fontWeight:700,fontFamily:"inherit",cursor:hasAny?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s",boxShadow:hasAny?"0 2px 10px rgba(12,166,120,0.3)":"none"}}>🖨️ 인쇄</button>
-            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:FS.base,color:"#64748b",cursor:"pointer",userSelect:"none",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px"}}>
-              <input type="checkbox" checked={hidePrice} onChange={e=>setHidePrice(e.target.checked)} style={{width:16,height:16,cursor:"pointer",accentColor:"#3b5bdb"}}/>
-              약가제외
-            </label>
+          {/* PPI 패널 */}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <div style={{fontSize:FS.base,color:"#64748b",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 12px",display:"flex",alignItems:"center",gap:7}}>
+              <span style={{width:10,height:10,borderRadius:"50%",background:ACCENT[activeSlot],display:"inline-block"}}/>
+              <span><b style={{color:ACCENT[activeSlot]}}>슬롯 {activeSlot+1}</b> 활성 · 슬롯 클릭으로 변경</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:7,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"6px 14px",fontSize:FS.base,color:"#3730a3"}}>
+              📐 PPI:
+              <input type="number" value={ppiInput} onChange={e=>setPpiInput(e.target.value)} placeholder="460" min="72" max="600" style={{width:62,padding:"3px 8px",border:"1px solid #bfdbfe",borderRadius:5,fontSize:FS.base,color:"#1a1f36",background:"white",outline:"none"}}/>
+              <button onClick={applyPPI} style={{padding:"3px 10px",background:"#3b5bdb",border:"none",borderRadius:5,color:"white",fontSize:FS.sm,cursor:"pointer",fontFamily:"inherit"}}>적용</button>
+              <span style={{fontSize:FS.sm,color:"#6366f1"}}>아이폰15:460 / 갤S24:416</span>
+            </div>
           </div>
-        </div>
-
         </div>
 
         {/* ─── 슬롯 그리드: 1~8번(2줄) 항상 모두 표시, 인쇄 시 printArea만 출력 ─── */}
@@ -588,6 +552,7 @@ export default function App() {
               <div className="print-title">약품 실제 크기 비교표</div>
               <div className="print-sub">건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
             </div>
+            <div className="print-date">인쇄일: {new Date().toLocaleDateString("ko-KR")}</div>
           </div>
         {rows.map((row,ri)=>{
           return(
@@ -615,7 +580,7 @@ export default function App() {
                           <span style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0,display:"inline-block"}}/>
                           <span style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"keep-all",textAlign:"center"}}>{pill.name}</span>
                         </div>
-                        <div className="pill-shape-box" style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:90,overflow:"hidden"}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:90,overflow:"hidden"}}>
                           <div style={{maxWidth:"100%",maxHeight:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
                             <PillShapeEl pill={pill} pxPerMm={pxPerMm} accentColor={color}/>
                           </div>
@@ -631,13 +596,13 @@ export default function App() {
                         {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>제조/판매: {pill.entpName}</div>}
                         {/* spacer: 약 이름·제조사 줄 수가 달라도 보험가는 항상 카드 맨 아래로 고정 */}
                         <div style={{flex:1}}/>
-                        {/* 보험가 슬롯 표시 — "약가제외" 체크 시 화면·인쇄 모두에서 숨김 */}
-                        {!hidePrice && (pill.price
+                        {/* 보험가 슬롯 표시 — 가독성을 위해 기존 대비 2배 크기, 모든 카드 동일 높이로 하단 정렬 */}
+                        {pill.price
                           ? <div style={{fontSize:FS.xs*2,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"3px 10px",flexShrink:0}}>
                               💊 {Number(pill.price).toLocaleString()}원/{pill.priceUnit||"정"}
                             </div>
                           : <div style={{fontSize:FS.xs*2,color:"#94a3b8",flexShrink:0}}>보험가 미등재</div>
-                        )}
+                        }
                       </>
                     ):(
                       <>
@@ -673,7 +638,7 @@ export default function App() {
                   ))}
                 </tr></thead>
                 <tbody>
-                  {tableRows.filter(r=>!(hidePrice&&r.label==="보험가")).map(({label,render})=>(
+                  {tableRows.map(({label,render})=>(
                     <tr key={label}>
                       <th style={{background:"#f8fafc",padding:"10px",fontSize:FS.base,fontWeight:700,color:"#64748b",borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",textAlign:"left",whiteSpace:"nowrap",verticalAlign:"middle"}}>{label}</th>
                       {filledSlots.map(({pill,idx})=>(
