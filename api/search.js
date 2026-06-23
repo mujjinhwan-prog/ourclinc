@@ -13,7 +13,6 @@ export default async function handler(req, res) {
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
-  // ── 식약처 낱알식별 조회 ──────────────────────────────────────────────────
   async function callMfds(word, rows = 30) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
@@ -49,12 +48,9 @@ export default async function handler(req, res) {
     return m ? m[1].trim() : null;
   }
 
-  // ── HIRA 약가기준정보조회 ──────────────────────────────────────────────────
-  // 수정: 한글단위 → 영문 변환 + 기본 품목명으로 검색 + 3단계 매칭
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
-      // 1) 괄호 제거 후 한글 단위를 영문으로 변환 (HIRA DB는 mg/ml 표기)
       let word = itemName
         .replace(/\(.*?\)/g, '')
         .replace(/밀리그램/g, 'mg')
@@ -64,12 +60,8 @@ export default async function handler(req, res) {
         .replace(/그램/g, 'g')
         .replace(/단위/g, 'IU')
         .trim();
-
-      // 2) 숫자·슬래시 이전 기본 품목명만 추출하여 검색
-      //    예: "네시나메트정12.5/1000mg" → "네시나메트정"
       const baseMatch = word.match(/^([가-힣a-zA-Z]+)/);
       const searchWord = baseMatch ? baseMatch[1] : word.substring(0, 6);
-
       const params = new URLSearchParams({
         serviceKey: HIRA_KEY,
         itmNm: searchWord,
@@ -79,31 +71,25 @@ export default async function handler(req, res) {
       const url = 'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params;
       const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!r.ok) { console.log('HIRA price fetch failed:', r.status); return null; }
-
       const xml = await r.text();
       const resultCode = getXmlTag(xml, 'resultCode');
       if (resultCode && resultCode !== '00') {
         console.log('HIRA price API error:', resultCode, getXmlTag(xml, 'resultMsg'));
         return null;
       }
-
       const items = parseHiraXmlItems(xml);
       if (items.length === 0) { console.log('HIRA price no items for:', searchWord); return null; }
-
-      // 3) 변환된 전체 단어 → 기본명 → 첫 번째 결과 순으로 매칭
       const normWord = word.replace(/\s/g, '');
       const normBase = searchWord.replace(/\s/g, '');
       const best =
         items.find(it => (it.itmNm || '').replace(/\s/g, '').includes(normWord)) ||
         items.find(it => (it.itmNm || '').replace(/\s/g, '').includes(normBase)) ||
         items[0];
-
       const priceRaw = best.mxCprc;
       if (priceRaw === undefined || priceRaw === null || priceRaw === '') return null;
       const price = parseFloat(String(priceRaw).replace(/,/g, ''));
       if (isNaN(price) || price <= 0) return null;
-
-      console.log('HIRA price "' + itemName + '" -> ' + best.itmNm + ': ' + price + ' ' + (best.unit || '정'));
+      console.log('HIRA price "' + itemName + '" -> ' + best.itmNm + ': ' + price);
       return { price, unit: best.unit || '정' };
     } catch (e) {
       console.error('callHiraPrice error:', e.message);
@@ -123,8 +109,8 @@ export default async function handler(req, res) {
       DRUG_SHPE:      it.DRUG_SHAPE      || it.DRUG_SHPE || '',
       DRUG_COLO:      it.COLOR_CLASS1    || it.DRUG_COLO || it.DRUG_COLO_FRONT || '',
       DRUG_COLO_BACK: it.COLOR_CLASS2    || it.DRUG_COLO_BACK || '',
-      PRINT_FRONT:    it.MARK_CODE_FRONT || it.PRINT_FRONT     || '',
-      PRINT_BACK:     it.MARK_CODE_BACK  || it.PRINT_BACK      || '',
+      PRINT_FRONT:    it.MARK_CODE_FRONT || it.PRINT_FRONT || '',
+      PRINT_BACK:     it.MARK_CODE_BACK  || it.PRINT_BACK  || '',
       FORM_CODE_NAME: it.FORM_CODE_NAME  || '',
       ETC_OTC_NAME:   it.ETC_OTC_NAME    || '',
       LNGS_STDR:      long,
@@ -142,7 +128,6 @@ export default async function handler(req, res) {
     const q = query.trim();
     const candidates = [q, q.substring(0,4), q.substring(0,3), q.substring(0,2)]
       .filter((v,i,a) => v.length >= 2 && a.indexOf(v) === i);
-
     let rawItems = [];
     for (const word of candidates) {
       const items = await callMfds(word);
@@ -151,22 +136,18 @@ export default async function handler(req, res) {
       );
       if (valid.length > 0) { rawItems = valid; break; }
     }
-
     const kw = q.replace(/\s/g,'').substring(0,2);
     let filtered = rawItems.filter(it =>
       (it.ITEM_NAME||'').replace(/\s/g,'').includes(kw)
     );
     if (!filtered.length) filtered = rawItems;
-
     filtered.sort((a,b) => {
       const an=(a.ITEM_NAME||'').replace(/\s/g,'');
       const bn=(b.ITEM_NAME||'').replace(/\s/g,'');
       const k=q.replace(/\s/g,'').substring(0,3);
       return (an.startsWith(k)?0:an.includes(k)?1:2)-(bn.startsWith(k)?0:bn.includes(k)?1:2);
     });
-
     let mfdsResult = filtered.map(normalize);
-
     if (mfdsResult.length > 0 && HIRA_KEY) {
       const priceCache = new Map();
       mfdsResult = await Promise.all(mfdsResult.map(async it => {
@@ -190,9 +171,7 @@ export default async function handler(req, res) {
         }
       }));
     }
-
     if (mfdsResult.length > 0) return res.status(200).json(mfdsResult);
-
     if (!AI_KEY) return res.status(200).json([]);
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -218,7 +197,6 @@ export default async function handler(req, res) {
     if (s===-1||e===-1) return res.status(200).json([]);
     const parsed = JSON.parse(text.substring(s,e+1));
     return res.status(200).json(parsed.filter(it=>it.LNGS_STDR&&it.SHRT_STDR));
-
   } catch(e) {
     console.error('Fatal:', e.message);
     return res.status(500).json({ error: e.message });
