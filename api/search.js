@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   }
 
   function getXmlTag(xml, tag) {
-    const m = xml.match(new RegExp('<' + tag + '>([\\s\\S]*?)<\/' + tag + '>'));
+    const m = xml.match(new RegExp('<' + tag + '>([\\s\\S]*?)<\\/' + tag + '>'));
     return m ? m[1].trim() : null;
   }
 
