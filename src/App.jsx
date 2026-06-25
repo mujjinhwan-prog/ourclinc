@@ -465,7 +465,7 @@ export default function App() {
                         onMouseLeave={e=>{e.currentTarget.style.background="white";}}>
                         <div style={{width:r.shape==="oblong"?30:18,height:16,borderRadius:shapeR,flexShrink:0,background:pillBg,border:"1px solid #ccc"}}/>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:FS.lg,fontWeight:600,color:"#1a1f36",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}{already?" ✓":""}</div>
+                          <div style={{fontSize:FS.lg,fontWeight:600,color:"#1a1f36",wordBreak:"break-word",overflowWrap:"anywhere",lineHeight:1.3}}>{r.name}{already?" ✓":""}</div>
                           <div style={{fontSize:FS.sm,color:"#94a3b8",marginTop:1,display:"flex",gap:4,flexWrap:"wrap"}}>
                             {r.etcOtc&&<span style={{background:r.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",color:r.etcOtc.includes("전문")?"#dc2626":"#16a34a",padding:"1px 5px",borderRadius:3,fontWeight:700,fontSize:FS.sm}}>{r.etcOtc.includes("전문")?"전문":"일반"}</span>}
                             {r.formName&&<span style={{background:"#eff6ff",color:"#3b5bdb",padding:"1px 5px",borderRadius:3,fontSize:FS.sm}}>{r.formName}</span>}
