@@ -131,6 +131,7 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
       <text x={RX+8} y={midY} textAnchor="start" dominantBaseline="middle" fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700">{hLabel}</text>
     </g>
   );
+
   if (pill.formType==="capsule") {
     const rx=Math.min(wPx,hPx)/2, midX=X0+wPx/2;
     return (
@@ -151,30 +152,91 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
       </svg>
     );
   }
+
   let shapePath="", rx=0, ry=0;
-  if (pill.shape==="circle"){rx=wPx/2;ry=hPx/2;}
-  else if (pill.shape==="oval"||pill.shape==="oblong"){const asp=wPx/hPx,cr=asp>=1.6?0.27:0.4;ry=hPx*cr;rx=Math.min(wPx*cr,ry*1.3);}
-  else if (pill.shape==="rectangle"){rx=4;ry=4;}
-  else if (pill.shape==="halfcircle"){shapePath=`M${X0},${Y0+hPx} Q${X0},${Y0} ${X0+wPx/2},${Y0} Q${X0+wPx},${Y0} ${X0+wPx},${Y0+hPx} Z`;}
-  else if (pill.shape==="diamond"){shapePath=`M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx/2} L${X0+wPx/2},${Y0+hPx} L${X0},${Y0+hPx/2} Z`;}
-  else if (pill.shape==="pentagon"){const cx=X0+wPx/2,cy=Y0+hPx/2,rr=Math.min(wPx,hPx)/2;shapePath=Array.from({length:5},(_,i)=>{const a=(i*72-90)*Math.PI/180;return(i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z";}
-  else if (pill.shape==="hexagon"){const cx=X0+wPx/2,cy=Y0+hPx/2,rr=Math.min(wPx,hPx)/2;shapePath=Array.from({length:6},(_,i)=>{const a=(i*60-30)*Math.PI/180;return(i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z";}
-  else if (pill.shape==="triangle"){shapePath=`M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx} L${X0},${Y0+hPx} Z`;}
-  else{rx=Math.min(wPx,hPx)*0.15;ry=rx;}
+  const cx=X0+wPx/2, cy=Y0+hPx/2;
+
+  if (pill.shape==="circle") {
+    rx=wPx/2; ry=hPx/2;
+  } else if (pill.shape==="oval"||pill.shape==="oblong") {
+    const asp=wPx/hPx, cr=asp>=1.6?0.27:0.4;
+    ry=hPx*cr; rx=Math.min(wPx*cr,ry*1.3);
+  } else if (pill.shape==="rectangle") {
+    rx=4; ry=4;
+  } else if (pill.shape==="halfcircle") {
+    shapePath=`M${X0},${Y0+hPx} Q${X0},${Y0} ${cx},${Y0} Q${X0+wPx},${Y0} ${X0+wPx},${Y0+hPx} Z`;
+  } else if (pill.shape==="diamond") {
+    // 모서리 둥글게 처리
+    const dr=Math.min(wPx,hPx)*0.12;
+    shapePath=`M${cx},${Y0+dr} L${X0+wPx-dr},${cy-dr} Q${X0+wPx},${cy} ${X0+wPx-dr},${cy+dr} L${cx},${Y0+hPx-dr} Q${cx},${Y0+hPx} ${cx-dr},${Y0+hPx-dr} L${X0+dr},${cy+dr} Q${X0},${cy} ${X0+dr},${cy-dr} L${cx-dr},${Y0+dr} Q${cx},${Y0} ${cx},${Y0+dr} Z`;
+  } else if (pill.shape==="pentagon") {
+    const rr=Math.min(wPx,hPx)/2;
+    shapePath=Array.from({length:5},(_,i)=>{const a=(i*72-90)*Math.PI/180;return(i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z";
+  } else if (pill.shape==="hexagon") {
+    const rr=Math.min(wPx,hPx)/2;
+    shapePath=Array.from({length:6},(_,i)=>{const a=(i*60-30)*Math.PI/180;return(i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z";
+  } else if (pill.shape==="triangle") {
+    // 모서리 둥글게 처리
+    const tr=Math.min(wPx,hPx)*0.10;
+    shapePath=`M${cx},${Y0+tr} Q${cx},${Y0} ${cx+tr*1.5},${Y0+tr*2} L${X0+wPx-tr},${Y0+hPx-tr} Q${X0+wPx},${Y0+hPx} ${X0+wPx-tr*2},${Y0+hPx} L${X0+tr*2},${Y0+hPx} Q${X0},${Y0+hPx} ${X0+tr},${Y0+hPx-tr} L${cx-tr*1.5},${Y0+tr*2} Q${cx},${Y0} ${cx},${Y0+tr} Z`;
+  } else {
+    rx=Math.min(wPx,hPx)*0.15; ry=rx;
+  }
+
   const useRect=!shapePath;
+
   return (
     <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} xmlns="http://www.w3.org/2000/svg" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto"}}>
       <defs>
-        <radialGradient id={`${uid}_rg`} cx="38%" cy="32%" r="65%"><stop offset="0%" stopColor={pcL}/><stop offset="55%" stopColor={pc}/><stop offset="100%" stopColor={pcD}/></radialGradient>
-        <linearGradient id={`${uid}_sh2`} x1="0" y1="0" x2="0.3" y2="1"><stop offset="0%" stopColor="rgba(255,255,255,0.65)"/><stop offset="100%" stopColor="rgba(255,255,255,0)"/></linearGradient>
-        <filter id={`${uid}_sd`} x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation={isWhite?"3":"4"} floodColor={isWhite?"#aaa":pc} floodOpacity={isWhite?"0.22":"0.42"}/></filter>
-        <clipPath id={`${uid}_cl`}>{shapePath?<path d={shapePath}/>:<rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry}/>}</clipPath>
+        <radialGradient id={`${uid}_rg`} cx="38%" cy="32%" r="65%">
+          <stop offset="0%" stopColor={pcL}/><stop offset="55%" stopColor={pc}/><stop offset="100%" stopColor={pcD}/>
+        </radialGradient>
+        <linearGradient id={`${uid}_shine`} x1="0" y1="0" x2="0.3" y2="1">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.65)"/><stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </linearGradient>
+        <filter id={`${uid}_sd`} x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation={isWhite?"3":"4"} floodColor={isWhite?"#aaa":pc} floodOpacity={isWhite?"0.22":"0.42"}/>
+        </filter>
+        <clipPath id={`${uid}_cl`}>
+          {shapePath?<path d={shapePath}/>:<rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry}/>}
+        </clipPath>
       </defs>
-      {useRect?<rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_sd)`}/>:<path d={shapePath} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_sd)`}/>}
+
+      {/* 약 몸체 */}
+      {useRect
+        ?<rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_sd)`}/>
+        :<path d={shapePath} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_sd)`}/>
+      }
+
+      {/* 강조 링 - rect 기반 */}
       {useRect&&<rect x={X0-2} y={Y0-2} width={wPx+4} height={hPx+4} rx={rx+2} ry={ry+2} fill="none" stroke={accentColor} strokeWidth="1.5" opacity="0.25"/>}
-      <rect x={X0+wPx*0.08} y={Y0+hPx*0.07} width={wPx*0.5} height={hPx*0.28} rx={Math.min(wPx,hPx)*0.08} fill={`url(#${uid}_sh2)`} clipPath={`url(#${uid}_cl)`} opacity="0.7"/>
-      {(pill.shape==="oblong"||pill.shape==="oval"||pill.shape==="circle")&&<line x1={X0+wPx*0.5} y1={Y0+hPx*0.15} x2={X0+wPx*0.5} y2={Y0+hPx*0.85} stroke="rgba(0,0,0,0.10)" strokeWidth="1.2" strokeDasharray={pill.shape==="circle"?"":"3,2"} clipPath={`url(#${uid}_cl)`}/>}
-      {pill.markFront&&<text x={X0+wPx/2} y={Y0+hPx/2+markFontSz*0.38} textAnchor="middle" fontSize={markFontSz} fill={textColor} fontWeight="900" fontFamily="monospace" opacity="0.82" clipPath={`url(#${uid}_cl)`}>{pill.markFront}</text>}
+
+      {/* 강조 링 - path 기반 (diamond, triangle 등) */}
+      {!useRect&&shapePath&&(
+        <path d={shapePath} fill="none" stroke={accentColor} strokeWidth="3" opacity="0.2"
+          transform={`translate(${cx},${cy}) scale(1.06) translate(${-cx},${-cy})`}/>
+      )}
+
+      {/* 광택 */}
+      <rect x={X0+wPx*0.08} y={Y0+hPx*0.07} width={wPx*0.5} height={hPx*0.28}
+        rx={Math.min(wPx,hPx)*0.08} fill={`url(#${uid}_shine)`}
+        clipPath={`url(#${uid}_cl)`} opacity="0.7"/>
+
+      {/* 중앙 분할선 */}
+      {(pill.shape==="oblong"||pill.shape==="oval"||pill.shape==="circle")&&(
+        <line x1={X0+wPx*0.5} y1={Y0+hPx*0.15} x2={X0+wPx*0.5} y2={Y0+hPx*0.85}
+          stroke="rgba(0,0,0,0.10)" strokeWidth="1.2"
+          strokeDasharray={pill.shape==="circle"?"":"3,2"}
+          clipPath={`url(#${uid}_cl)`}/>
+      )}
+
+      {/* 식별문자 */}
+      {pill.markFront&&(
+        <text x={cx} y={cy+markFontSz*0.38} textAnchor="middle"
+          fontSize={markFontSz} fill={textColor} fontWeight="900" fontFamily="monospace" opacity="0.82"
+          clipPath={`url(#${uid}_cl)`}>{pill.markFront}</text>
+      )}
+
       {rulerW}{rulerH}
     </svg>
   );
@@ -195,7 +257,6 @@ export default function App() {
   const [ppiInput,setPpiInput]   = useState("");
   const [hidePrice,setHidePrice] = useState(false);
   const debRef=useRef(null), inRef=useRef(null), dropRef=useRef(null);
-
   const FS = { xs:10.5, sm:12, base:15, md:16.5, lg:18, xl:21, "2xl":24 };
 
   useEffect(()=>{
@@ -265,7 +326,7 @@ export default function App() {
         @keyframes spin{to{transform:rotate(360deg)}}
         *{box-sizing:border-box}
 
-        /* ── 모바일 세로형 (≤ 639px) ─────────────────────────────────────── */
+        /* ── 모바일 세로형 (≤ 639px) ── */
         @media (max-width:639px){
           .app-header-inner{height:48px !important;}
           .app-logo{height:30px !important;}
@@ -290,7 +351,7 @@ export default function App() {
           .slot-hint{font-size:12px !important;}
         }
 
-        /* ── 태블릿 세로형 (640px ~ 1023px, portrait) ──────────────────── */
+        /* ── 태블릿 세로형 (640px~1023px portrait) ── */
         @media (min-width:640px) and (max-width:1023px) and (orientation:portrait){
           .app-header-inner{height:50px !important;}
           .main-pad{padding:10px 10px 40px !important;}
@@ -301,7 +362,7 @@ export default function App() {
           .pill-shape-box{height:75px !important;}
         }
 
-        /* ── 태블릿 가로형: 8슬롯 한 화면에 (640px+, landscape) ─────────── */
+        /* ── 태블릿 가로형: 8슬롯 한 화면에 (landscape, 높이≤900px) ── */
         @media (min-width:640px) and (orientation:landscape) and (max-height:900px){
           .app-header-inner{height:40px !important;}
           .app-logo{height:24px !important;}
@@ -334,15 +395,14 @@ export default function App() {
           .slot-num{font-size:22px !important;}
           .slot-hint{font-size:11px !important;}
           .print-vs{margin:3px 0 !important;}
-          .print-vs .badge{font-size:10pt !important;padding:3px 14px !important;}
         }
 
-        /* ── 데스크탑 (1024px+) ─────────────────────────────────────────── */
+        /* ── 데스크탑 (1024px+) ── */
         @media (min-width:1024px){
           .slot-card{min-height:260px;height:auto;}
         }
 
-        /* ── 인쇄 ───────────────────────────────────────────────────────── */
+        /* ── 인쇄 ── */
         .print-vs{display:none;}
         .print-only-header{display:none;}
         @media print{
@@ -419,7 +479,6 @@ export default function App() {
             </div>
             <button className="btn-search" onClick={()=>doSearch(query)} style={{padding:"11px 18px",background:"linear-gradient(135deg,#3b5bdb,#7048e8)",border:"none",borderRadius:10,color:"white",fontSize:FS.xl,fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>검색</button>
           </div>
-
           <div className="ctrl-bar" style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
             <div style={{fontSize:FS.base,color:"#64748b",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 10px",display:"flex",alignItems:"center",gap:6}}>
               <span style={{width:9,height:9,borderRadius:"50%",background:ACCENT[activeSlot],display:"inline-block"}}/>
@@ -481,7 +540,7 @@ export default function App() {
                             </div>
                             <span>1cm</span>
                           </div>
-                          <div className="pill-size-text" style={{fontSize:FS.xs,color:color,fontWeight:700,fontFamily:"monospace",textAlign:"center"}}>{pill.width}x{pill.height}{pill.thickness?"x"+pill.thickness:""}mm</div>
+                          <div className="pill-size-text" style={{fontSize:FS.xs,color,fontWeight:700,fontFamily:"monospace",textAlign:"center"}}>{pill.width}x{pill.height}{pill.thickness?"x"+pill.thickness:""}mm</div>
                           {pill.entpName&&<div className="pill-entp" style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center",wordBreak:"break-word"}}>{pill.entpName}</div>}
                           <div style={{flex:1}}/>
                           {!hidePrice&&(pill.price
