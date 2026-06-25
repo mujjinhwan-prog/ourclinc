@@ -14,7 +14,6 @@ function parseFormType(formName) {
   if (!formName) return "tablet";
   const f = formName.replace(/\s/g, "");
   if (f.includes("캡슐") || f.includes("연질캡슐") || f.includes("경질캡슐")) return "capsule";
-  if (f.includes("시럽") || f.includes("액")) return "liquid";
   return "tablet";
 }
 const COLOR_MAP = [
@@ -54,17 +53,13 @@ function parsePillColor(s) {
 function lighten(hex, amt=40) {
   if (!hex || hex.startsWith("rgba")) return hex;
   const n = parseInt(hex.slice(1), 16);
-  const r = Math.min(255, (n>>16)+amt);
-  const g = Math.min(255, ((n>>8)&0xff)+amt);
-  const b = Math.min(255, (n&0xff)+amt);
+  const r = Math.min(255, (n>>16)+amt), g = Math.min(255, ((n>>8)&0xff)+amt), b = Math.min(255, (n&0xff)+amt);
   return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
 }
 function darken(hex, amt=30) {
   if (!hex || hex.startsWith("rgba")) return hex;
   const n = parseInt(hex.slice(1), 16);
-  const r = Math.max(0, (n>>16)-amt);
-  const g = Math.max(0, ((n>>8)&0xff)-amt);
-  const b = Math.max(0, (n&0xff)-amt);
+  const r = Math.max(0, (n>>16)-amt), g = Math.max(0, ((n>>8)&0xff)-amt), b = Math.max(0, (n&0xff)-amt);
   return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
 }
 
@@ -103,31 +98,24 @@ async function fetchDrug(query) {
 }
 
 function PillShapeEl({ pill, pxPerMm, accentColor }) {
-  const wPx = Math.round(pill.width  * pxPerMm);
+  const wPx = Math.round(pill.width * pxPerMm);
   const hPx = Math.round(pill.height * pxPerMm);
-  const pc   = pill.colorCss || "#d0d0d0";
-  const pcB  = pill.colorBack || pc;
-  const pcL  = lighten(pc, 50);
-  const pcD  = darken(pc, 30);
+  const pc = pill.colorCss || "#d0d0d0";
+  const pcB = pill.colorBack || pc;
+  const pcL = lighten(pc, 50), pcD = darken(pc, 30);
   const isWhite = pc === "#FFFFFF";
-  const isLight = ["#FFFFFF","#FFF0A0","#FBBCD4","#FFCCAA","#90CAF9","#9CCC65","#CE93D8","rgba(220,220,220,0.3)"].includes(pc);
+  const isLight = ["#FFFFFF","#FFF0A0","#FBBCD4","#FFCCAA","#90CAF9","#9CCC65","#CE93D8"].includes(pc);
   const textColor = isLight ? "#555" : "#fff";
   const markFontSz = Math.max(7, Math.min(wPx, hPx) * 0.17);
   const strokeColor = isWhite ? "#bbb" : darken(pc, 20);
   const uid = `pill_${Math.random().toString(36).slice(2)}`;
-  const wLabel = (Number.isInteger(pill.width)  ? pill.width  : Math.round(pill.width*10)/10)  + "mm";
+  const wLabel = (Number.isInteger(pill.width) ? pill.width : Math.round(pill.width*10)/10) + "mm";
   const hLabel = (Number.isInteger(pill.height) ? pill.height : Math.round(pill.height*10)/10) + "mm";
-  const wLabelLen = wLabel.length;
-  const hLabelLen = hLabel.length;
-  const wTextPx = wLabelLen * 13 * 0.62 + 8;
+  const wTextPx = wLabel.length * 13 * 0.62 + 8;
   const drawW = Math.max(wPx, wTextPx);
-  const PAD = 6;
-  const X0 = (drawW - wPx) / 2 + PAD;
-  const Y0 = PAD;
-  const RW = 16 + hLabelLen * 9 + PAD;
-  const RH = 36 + PAD;
-  const svgW = drawW + RW + PAD;
-  const svgH = hPx + RH + PAD;
+  const PAD = 6, X0 = (drawW - wPx) / 2 + PAD, Y0 = PAD;
+  const RW = 16 + hLabel.length * 9 + PAD, RH = 36 + PAD;
+  const svgW = drawW + RW + PAD, svgH = hPx + RH + PAD;
   const RY = Y0 + hPx + 8;
   const rulerW = (
     <g>
@@ -137,8 +125,7 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
       <text x={X0+wPx/2} y={RY+18} textAnchor="middle" fontSize="13" fill={accentColor} fontFamily="monospace" fontWeight="700">{wLabel}</text>
     </g>
   );
-  const RX = X0 + wPx + 10;
-  const midY = Y0 + hPx / 2;
+  const RX = X0 + wPx + 10, midY = Y0 + hPx / 2;
   const rulerH = (
     <g>
       <line x1={RX} y1={Y0} x2={RX} y2={Y0+hPx} stroke={accentColor} strokeWidth="1.5"/>
@@ -148,88 +135,49 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
     </g>
   );
   if (pill.formType === "capsule") {
-    const rx = Math.min(wPx, hPx) / 2;
-    const midX = X0 + wPx / 2;
+    const rx = Math.min(wPx, hPx) / 2, midX = X0 + wPx / 2;
     return (
       <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} xmlns="http://www.w3.org/2000/svg" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto"}}>
         <defs>
-          <linearGradient id={`${uid}_capL`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={pcL}/><stop offset="50%" stopColor={pc}/><stop offset="100%" stopColor={pcD}/>
-          </linearGradient>
-          <linearGradient id={`${uid}_capR`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lighten(pcB,50)}/><stop offset="50%" stopColor={pcB}/><stop offset="100%" stopColor={darken(pcB,30)}/>
-          </linearGradient>
+          <linearGradient id={`${uid}_capL`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={pcL}/><stop offset="50%" stopColor={pc}/><stop offset="100%" stopColor={pcD}/></linearGradient>
+          <linearGradient id={`${uid}_capR`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={lighten(pcB,50)}/><stop offset="50%" stopColor={pcB}/><stop offset="100%" stopColor={darken(pcB,30)}/></linearGradient>
           <clipPath id={`${uid}_clipL`}><rect x={X0} y={Y0} width={wPx/2} height={hPx}/></clipPath>
           <clipPath id={`${uid}_clipR`}><rect x={midX} y={Y0} width={wPx/2} height={hPx}/></clipPath>
-          <filter id={`${uid}_shadow`} x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={pc} floodOpacity="0.4"/>
-          </filter>
+          <filter id={`${uid}_shadow`} x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={pc} floodOpacity="0.4"/></filter>
         </defs>
         <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={rx} fill={`url(#${uid}_capL)`} clipPath={`url(#${uid}_clipL)`} stroke={strokeColor} strokeWidth="1.2" filter={`url(#${uid}_shadow)`}/>
         <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={rx} fill={`url(#${uid}_capR)`} clipPath={`url(#${uid}_clipR)`} stroke={strokeColor} strokeWidth="1.2"/>
         <line x1={midX} y1={Y0+2} x2={midX} y2={Y0+hPx-2} stroke="rgba(0,0,0,0.12)" strokeWidth="1.5"/>
-        <ellipse cx={X0+wPx*0.28} cy={Y0+hPx*0.28} rx={wPx*0.14} ry={hPx*0.12} fill="rgba(255,255,255,0.55)" transform={`rotate(-20,${X0+wPx*0.28},${Y0+hPx*0.28})`}/>
         {pill.markFront && <text x={X0+wPx*0.25} y={Y0+hPx/2+markFontSz*0.35} textAnchor="middle" fontSize={markFontSz} fill={textColor} fontWeight="800" fontFamily="monospace" opacity="0.85">{pill.markFront}</text>}
         {pill.markBack && <text x={X0+wPx*0.75} y={Y0+hPx/2+markFontSz*0.35} textAnchor="middle" fontSize={markFontSz} fill={isLight?"#555":"#fff"} fontWeight="800" fontFamily="monospace" opacity="0.85">{pill.markBack}</text>}
         {rulerW}{rulerH}
       </svg>
     );
   }
-  let shapePath = "";
-  let rx = 0, ry = 0;
-  if (pill.shape === "circle") {
-    rx = wPx/2; ry = hPx/2;
-  } else if (pill.shape === "oval" || pill.shape === "oblong") {
-    const aspect = wPx/hPx;
-    const cornerRatio = aspect >= 1.6 ? 0.27 : 0.4;
-    ry = hPx*cornerRatio;
-    rx = Math.min(wPx*cornerRatio, ry*1.3);
-  } else if (pill.shape === "rectangle") {
-    rx = 4; ry = 4;
-  } else if (pill.shape === "halfcircle") {
-    shapePath = `M${X0},${Y0+hPx} Q${X0},${Y0} ${X0+wPx/2},${Y0} Q${X0+wPx},${Y0} ${X0+wPx},${Y0+hPx} Z`;
-  } else if (pill.shape === "diamond") {
-    shapePath = `M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx/2} L${X0+wPx/2},${Y0+hPx} L${X0},${Y0+hPx/2} Z`;
-  } else if (pill.shape === "pentagon") {
-    const cx=X0+wPx/2, cy=Y0+hPx/2, rr=Math.min(wPx,hPx)/2;
-    shapePath = Array.from({length:5},(_,i)=>{const a=(i*72-90)*Math.PI/180;return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z";
-  } else if (pill.shape === "hexagon") {
-    const cx=X0+wPx/2, cy=Y0+hPx/2, rr=Math.min(wPx,hPx)/2;
-    shapePath = Array.from({length:6},(_,i)=>{const a=(i*60-30)*Math.PI/180;return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z";
-  } else if (pill.shape === "triangle") {
-    shapePath = `M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx} L${X0},${Y0+hPx} Z`;
-  } else {
-    rx = Math.min(wPx,hPx)*0.15; ry = rx;
-  }
+  let shapePath = "", rx = 0, ry = 0;
+  if (pill.shape === "circle") { rx = wPx/2; ry = hPx/2; }
+  else if (pill.shape === "oval" || pill.shape === "oblong") { const asp=wPx/hPx,cr=asp>=1.6?0.27:0.4; ry=hPx*cr; rx=Math.min(wPx*cr,ry*1.3); }
+  else if (pill.shape === "rectangle") { rx=4; ry=4; }
+  else if (pill.shape === "halfcircle") { shapePath=`M${X0},${Y0+hPx} Q${X0},${Y0} ${X0+wPx/2},${Y0} Q${X0+wPx},${Y0} ${X0+wPx},${Y0+hPx} Z`; }
+  else if (pill.shape === "diamond") { shapePath=`M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx/2} L${X0+wPx/2},${Y0+hPx} L${X0},${Y0+hPx/2} Z`; }
+  else if (pill.shape === "pentagon") { const cx=X0+wPx/2,cy=Y0+hPx/2,rr=Math.min(wPx,hPx)/2; shapePath=Array.from({length:5},(_,i)=>{const a=(i*72-90)*Math.PI/180;return(i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z"; }
+  else if (pill.shape === "hexagon") { const cx=X0+wPx/2,cy=Y0+hPx/2,rr=Math.min(wPx,hPx)/2; shapePath=Array.from({length:6},(_,i)=>{const a=(i*60-30)*Math.PI/180;return(i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);}).join(" ")+"Z"; }
+  else if (pill.shape === "triangle") { shapePath=`M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx} L${X0},${Y0+hPx} Z`; }
+  else { rx=Math.min(wPx,hPx)*0.15; ry=rx; }
   const useRect = !shapePath;
   return (
     <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} xmlns="http://www.w3.org/2000/svg" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto"}}>
       <defs>
-        <radialGradient id={`${uid}_rg`} cx="38%" cy="32%" r="65%">
-          <stop offset="0%" stopColor={pcL}/><stop offset="55%" stopColor={pc}/><stop offset="100%" stopColor={pcD}/>
-        </radialGradient>
-        <linearGradient id={`${uid}_shine`} x1="0" y1="0" x2="0.3" y2="1">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.65)"/><stop offset="100%" stopColor="rgba(255,255,255,0)"/>
-        </linearGradient>
-        <filter id={`${uid}_shadow`} x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation={isWhite?"3":"4"} floodColor={isWhite?"#aaa":pc} floodOpacity={isWhite?"0.22":"0.42"}/>
-        </filter>
-        <clipPath id={`${uid}_clip`}>
-          {shapePath ? <path d={shapePath}/> : <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry}/>}
-        </clipPath>
+        <radialGradient id={`${uid}_rg`} cx="38%" cy="32%" r="65%"><stop offset="0%" stopColor={pcL}/><stop offset="55%" stopColor={pc}/><stop offset="100%" stopColor={pcD}/></radialGradient>
+        <linearGradient id={`${uid}_shine`} x1="0" y1="0" x2="0.3" y2="1"><stop offset="0%" stopColor="rgba(255,255,255,0.65)"/><stop offset="100%" stopColor="rgba(255,255,255,0)"/></linearGradient>
+        <filter id={`${uid}_shadow`} x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation={isWhite?"3":"4"} floodColor={isWhite?"#aaa":pc} floodOpacity={isWhite?"0.22":"0.42"}/></filter>
+        <clipPath id={`${uid}_clip`}>{shapePath?<path d={shapePath}/>:<rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry}/>}</clipPath>
       </defs>
-      {useRect
-        ? <rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_shadow)`}/>
-        : <path d={shapePath} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_shadow)`}/>
-      }
-      {useRect && <rect x={X0-2} y={Y0-2} width={wPx+4} height={hPx+4} rx={rx+2} ry={ry+2} fill="none" stroke={accentColor} strokeWidth="1.5" opacity="0.25"/>}
+      {useRect?<rect x={X0} y={Y0} width={wPx} height={hPx} rx={rx} ry={ry} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_shadow)`}/>:<path d={shapePath} fill={`url(#${uid}_rg)`} stroke={strokeColor} strokeWidth={isWhite?"1.5":"1"} filter={`url(#${uid}_shadow)`}/>}
+      {useRect&&<rect x={X0-2} y={Y0-2} width={wPx+4} height={hPx+4} rx={rx+2} ry={ry+2} fill="none" stroke={accentColor} strokeWidth="1.5" opacity="0.25"/>}
       <rect x={X0+wPx*0.08} y={Y0+hPx*0.07} width={wPx*0.5} height={hPx*0.28} rx={Math.min(wPx,hPx)*0.08} fill={`url(#${uid}_shine)`} clipPath={`url(#${uid}_clip)`} opacity="0.7"/>
-      {(pill.shape === "oblong" || pill.shape === "oval" || pill.shape === "circle") && (
-        <line x1={X0+wPx*0.5} y1={Y0+hPx*0.15} x2={X0+wPx*0.5} y2={Y0+hPx*0.85} stroke="rgba(0,0,0,0.10)" strokeWidth="1.2" strokeDasharray={pill.shape==="circle"?"":"3,2"} clipPath={`url(#${uid}_clip)`}/>
-      )}
-      {pill.markFront && (
-        <text x={X0+wPx/2} y={Y0+hPx/2+markFontSz*0.38} textAnchor="middle" fontSize={markFontSz} fill={textColor} fontWeight="900" fontFamily="monospace" opacity="0.82" clipPath={`url(#${uid}_clip)`}>{pill.markFront}</text>
-      )}
+      {(pill.shape==="oblong"||pill.shape==="oval"||pill.shape==="circle")&&<line x1={X0+wPx*0.5} y1={Y0+hPx*0.15} x2={X0+wPx*0.5} y2={Y0+hPx*0.85} stroke="rgba(0,0,0,0.10)" strokeWidth="1.2" strokeDasharray={pill.shape==="circle"?"":"3,2"} clipPath={`url(#${uid}_clip)`}/>}
+      {pill.markFront&&<text x={X0+wPx/2} y={Y0+hPx/2+markFontSz*0.38} textAnchor="middle" fontSize={markFontSz} fill={textColor} fontWeight="900" fontFamily="monospace" opacity="0.82" clipPath={`url(#${uid}_clip)`}>{pill.markFront}</text>}
       {rulerW}{rulerH}
     </svg>
   );
@@ -238,22 +186,19 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
 const MAX=8, ROW=4;
 
 export default function App() {
-  const [slots,setSlots]           = useState(Array(MAX).fill(null));
+  const [slots,setSlots] = useState(Array(MAX).fill(null));
   const [activeSlot,setActiveSlot] = useState(0);
-  const [query,setQuery]           = useState("");
-  const [results,setResults]       = useState([]);
-  const [loading,setLoading]       = useState(false);
-  const [error,setError]           = useState("");
-  const [showDrop,setShowDrop]     = useState(false);
-  const [pxPerMm,setPxPerMm]       = useState(3.7795);
-  const [dpiInfo,setDpiInfo]       = useState("DPI 측정 중...");
-  const [ppiInput,setPpiInput]     = useState("");
-  const [hidePrice,setHidePrice]   = useState(false);
+  const [query,setQuery] = useState("");
+  const [results,setResults] = useState([]);
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState("");
+  const [showDrop,setShowDrop] = useState(false);
+  const [pxPerMm,setPxPerMm] = useState(3.7795);
+  const [dpiInfo,setDpiInfo] = useState("DPI 측정 중...");
+  const [ppiInput,setPpiInput] = useState("");
+  const [hidePrice,setHidePrice] = useState(false);
   const debRef=useRef(null), inRef=useRef(null), dropRef=useRef(null);
-
-  const FS = {
-    xs:10.5, sm:12, base:15, md:16.5, lg:18, xl:21, "2xl":24,
-  };
+  const FS = { xs:10.5, sm:12, base:15, md:16.5, lg:18, xl:21, "2xl":24 };
 
   useEffect(()=>{
     const el=document.createElement("div");
@@ -305,17 +250,13 @@ export default function App() {
     slots.slice(0,ROW).map((s,i)=>({pill:s,idx:i})),
     slots.slice(ROW,MAX).map((s,i)=>({pill:s,idx:ROW+i})),
   ];
-
   const tableRows=[
     {label:"구분",render:(p)=>p.etcOtc?<span style={{background:p.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",color:p.etcOtc.includes("전문")?"#dc2626":"#16a34a",padding:"3px 12px",borderRadius:50,fontWeight:700,fontSize:FS.base,whiteSpace:"nowrap"}}>{p.etcOtc.includes("전문")?"전문의약품":"일반의약품"}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
     {label:"제형",render:(p)=>p.formName?<span style={{background:"#eff6ff",color:"#3b5bdb",padding:"3px 12px",borderRadius:50,fontSize:FS.base,fontWeight:600}}>{p.formName}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
     {label:"제조사",render:(p)=>(<span style={{fontSize:FS.base,color:"#1a1f36"}}>{p.entpName||"-"}</span>)},
     {label:"크기",render:(p,idx)=>(<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:ACCENT[idx],whiteSpace:"nowrap"}}>{p.width}x{p.height}{p.thickness?"x"+p.thickness:""}mm</span>)},
     {label:"효능군",render:(p)=>p.hiraClass?<span style={{fontSize:FS.base,color:"#64748b",background:"#f1f5f9",padding:"3px 10px",borderRadius:50,whiteSpace:"nowrap"}}>{p.hiraClass}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
-    {label:"보험가",render:(p)=>p.price
-      ?<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:"#0ca678",whiteSpace:"nowrap"}}>{Number(p.price).toLocaleString()}원 / {p.priceUnit||"정"}</span>
-      :<span style={{color:"#94a3b8",fontSize:FS.base}}>미등재</span>
-    },
+    {label:"보험가",render:(p)=>p.price?<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:"#0ca678",whiteSpace:"nowrap"}}>{Number(p.price).toLocaleString()}원/{p.priceUnit||"정"}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>미등재</span>},
   ];
 
   return (
@@ -333,7 +274,8 @@ export default function App() {
           #printArea,#printArea *{visibility:visible;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
           #printArea{position:relative;left:0;top:0;width:100%;margin-top:0;}
           .no-print{display:none !important;}
-          .slot-card{border:1.5px solid #e2e8f0 !important;box-shadow:none !important;background:white !important;}
+          .slot-card{border:1.5px solid #e2e8f0 !important;box-shadow:none !important;background:white !important;overflow:visible !important;height:auto !important;min-height:240px;}
+          .pill-name{word-break:break-word !important;overflow-wrap:anywhere !important;white-space:normal !important;}
           .print-only-header{display:flex !important;align-items:center;gap:10px;border-bottom:2.5px solid #3b5bdb;padding-bottom:6px;margin-bottom:8px;}
           .print-logo{height:36px;width:auto;max-width:80px;object-fit:contain;flex-shrink:0;}
           .print-title{font-size:15pt;font-weight:700;color:#1a1f36;}
@@ -387,7 +329,6 @@ export default function App() {
                           <div style={{fontSize:FS.base,color:"#94a3b8",marginTop:2,display:"flex",gap:5,flexWrap:"wrap"}}>
                             {r.etcOtc&&<span style={{background:r.etcOtc.includes("전문")?"#fee2e2":"#dcfce7",color:r.etcOtc.includes("전문")?"#dc2626":"#16a34a",padding:"1px 6px",borderRadius:3,fontWeight:700,fontSize:FS.base}}>{r.etcOtc.includes("전문")?"전문":"일반"}</span>}
                             {r.formName&&<span style={{background:"#eff6ff",color:"#3b5bdb",padding:"1px 6px",borderRadius:3,fontSize:FS.base}}>{r.formName}</span>}
-                            {r.colorName&&<span>{r.colorName}</span>}
                           </div>
                         </div>
                         <span style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 8px",fontSize:FS.base,fontFamily:"monospace",color:"#3b5bdb",whiteSpace:"nowrap"}}>{r.width}x{r.height}mm</span>
@@ -430,9 +371,7 @@ export default function App() {
             <Fragment key={ri}>
               {ri===1&&(
                 <div className="print-vs">
-                  <div className="line"/>
-                  <div className="badge">VS</div>
-                  <div className="line2"/>
+                  <div className="line"/><div className="badge">VS</div><div className="line2"/>
                 </div>
               )}
               <div className="slot-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
@@ -440,15 +379,15 @@ export default function App() {
                   const isActive=idx===activeSlot, color=ACCENT[idx];
                   return(
                     <div key={idx} className="slot-card" onClick={()=>clickSlot(idx)}
-                      style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",height:278,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
+                      style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",minHeight:278,height:"auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
                       onMouseEnter={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f0f4ff";}}
                       onMouseLeave={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f8fafc";}}>
                       {pill?(
                         <>
                           <button className="no-print" onClick={e=>removeSlot(e,idx)} style={{position:"absolute",top:8,right:8,background:"none",border:"1px solid #fecaca",borderRadius:4,cursor:"pointer",color:"#dc2626",fontSize:FS.sm,padding:"1px 7px",zIndex:2}}>×</button>
-                          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4,width:"100%",justifyContent:"center"}}>
                             <span style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0,display:"inline-block"}}/>
-                            <span style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"keep-all",textAlign:"center"}}>{pill.name}</span>
+                            <span className="pill-name" style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"break-word",overflowWrap:"anywhere",textAlign:"center"}}>{pill.name}</span>
                           </div>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:90,overflow:"hidden"}}>
                             <PillShapeEl pill={pill} pxPerMm={pxPerMm} accentColor={color}/>
@@ -461,7 +400,7 @@ export default function App() {
                             <span>1cm</span>
                           </div>
                           <div style={{fontSize:FS.xs,color:color,fontWeight:700,fontFamily:"monospace",textAlign:"center"}}>{pill.width}x{pill.height}{pill.thickness?"x"+pill.thickness:""}mm</div>
-                          {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>제조/판매: {pill.entpName}</div>}
+                          {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center",wordBreak:"break-word"}}>{pill.entpName}</div>}
                           <div style={{flex:1}}/>
                           {!hidePrice&&(pill.price
                             ?<div style={{fontSize:FS.xs*2,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"3px 10px",flexShrink:0}}>
@@ -497,7 +436,7 @@ export default function App() {
                     <th key={idx} style={{textAlign:"center",background:"#f8fafc",borderLeft:"1px solid #f1f5f9",borderBottom:"1px solid #f1f5f9",padding:"10px 8px",minWidth:150}}>
                       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
                         <span style={{width:8,height:8,borderRadius:"50%",background:ACCENT[idx],display:"inline-block"}}/>
-                        <span style={{fontSize:FS.base,fontWeight:700,color:ACCENT[idx],lineHeight:1.3,textAlign:"center"}}>{pill.name}</span>
+                        <span style={{fontSize:FS.base,fontWeight:700,color:ACCENT[idx],lineHeight:1.3,textAlign:"center",wordBreak:"break-word"}}>{pill.name}</span>
                       </div>
                     </th>
                   ))}
