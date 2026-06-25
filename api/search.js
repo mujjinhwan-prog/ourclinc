@@ -13,6 +13,7 @@ export default async function handler(req, res) {
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
+  // ── 식약처 낱알식별 조회 ──────────────────────────────────────────────────
   async function callMfds(word, rows = 30) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
@@ -61,6 +62,7 @@ export default async function handler(req, res) {
       .trim();
   }
 
+  // ── HIRA 약가 조회 ────────────────────────────────────────────────────────
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
@@ -69,7 +71,6 @@ export default async function handler(req, res) {
       const base = baseMatch ? baseMatch[1] : full.substring(0, 6);
       const clean = s => (s || '').replace(/\s/g, '');
 
-      // 기본명으로 한 번만 검색 (타임아웃 방지)
       const params = new URLSearchParams({
         serviceKey: HIRA_KEY,
         itmNm: base,
@@ -87,7 +88,6 @@ export default async function handler(req, res) {
       const items = parseHiraXmlItems(xml);
       if (!items.length) return null;
 
-      // 완전일치 → 포함일치 → 첫번째 순으로 매칭
       const best =
         items.find(it => clean(it.itmNm) === full) ||
         items.find(it => clean(it.itmNm).includes(full)) ||
@@ -97,6 +97,38 @@ export default async function handler(req, res) {
       const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
       if (isNaN(price) || price <= 0) return null;
       return { price, unit: best.unit || '정' };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ── Claude AI로 약가 보완 (HIRA에 없는 약 처리) ──────────────────────────
+  async function callAiPrice(itemName) {
+    if (!AI_KEY) return null;
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': AI_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 100,
+          system: '한국 건강보험 급여 의약품 보험약가(상한금액) 전문가. 숫자만 반환. 모르면 null.',
+          messages: [{
+            role: 'user',
+            content: `"${itemName}"의 건강보험 급여 상한금액(원/정)을 숫자만 답하세요. 급여 미등재면 null.`
+          }]
+        })
+      });
+      const d = await r.json();
+      const text = (d.content || []).map(b => b.text || '').join('').trim();
+      if (!text || text === 'null' || text.toLowerCase() === 'null') return null;
+      const price = parseFloat(text.replace(/[^0-9.]/g, ''));
+      if (isNaN(price) || price <= 0) return null;
+      return { price, unit: '정' };
     } catch (e) {
       return null;
     }
@@ -158,15 +190,23 @@ export default async function handler(req, res) {
 
     let mfdsResult = filtered.map(normalize);
 
-    if (mfdsResult.length > 0 && HIRA_KEY) {
-      // 중복 약품명 캐시 + 순차 처리로 타임아웃 방지
+    if (mfdsResult.length > 0) {
+      // 중복 제거용 캐시 (같은 품목명은 한 번만 조회)
       const priceCache = new Map();
+
       for (const it of mfdsResult) {
         const key = it.ITEM_NAME;
         if (!priceCache.has(key)) {
-          priceCache.set(key, await callHiraPrice(key));
+          // 1차: HIRA API
+          let result = await callHiraPrice(key);
+          // 2차: HIRA 없으면 Claude AI로 보완
+          if (!result && AI_KEY) {
+            result = await callAiPrice(key);
+          }
+          priceCache.set(key, result);
         }
       }
+
       mfdsResult = mfdsResult.map(it => {
         const result = priceCache.get(it.ITEM_NAME);
         return {
@@ -179,6 +219,7 @@ export default async function handler(req, res) {
 
     if (mfdsResult.length > 0) return res.status(200).json(mfdsResult);
 
+    // MFDS 결과 없으면 AI로 낱알식별 보완
     if (!AI_KEY) return res.status(200).json([]);
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
