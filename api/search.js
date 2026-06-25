@@ -13,7 +13,6 @@ export default async function handler(req, res) {
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
-  // ── 식약처 낱알식별 조회 ──────────────────────────────────────────────────
   async function callMfds(word, rows = 30) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
@@ -49,75 +48,79 @@ export default async function handler(req, res) {
     return m ? m[1].trim() : null;
   }
 
-  // ── HIRA 약가 조회: itmCd(보험코드) 우선, 실패 시 품목명 기본명으로 fallback ──
-  async function callHiraPrice(itemName, itemSeq) {
+  // 한글 단위 → 영문 변환 (HIRA DB 표기 기준)
+  function toHiraName(itemName) {
+    return itemName
+      .replace(/\(.*?\)/g, '')
+      .replace(/밀리그램/g, 'mg')
+      .replace(/마이크로그램/g, 'mcg')
+      .replace(/밀리리터/g, 'ml')
+      .replace(/리터/g, 'L')
+      .replace(/그램/g, 'g')
+      .replace(/단위/g, 'IU')
+      .replace(/\s+/g, '')
+      .trim();
+  }
+
+  async function queryHira(searchWord, numOfRows) {
+    const params = new URLSearchParams({
+      serviceKey: HIRA_KEY,
+      itmNm: searchWord,
+      numOfRows: String(numOfRows),
+      pageNo: '1',
+    });
+    const r = await fetch(
+      'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) return [];
+    const xml = await r.text();
+    const rc = getXmlTag(xml, 'resultCode');
+    if (rc && rc !== '00') return [];
+    return parseHiraXmlItems(xml);
+  }
+
+  function pickBest(items, normFull, normBase) {
+    const clean = s => (s || '').replace(/\s/g, '');
+    return (
+      items.find(it => clean(it.itmNm) === normFull) ||
+      items.find(it => clean(it.itmNm).includes(normFull)) ||
+      items.find(it => clean(it.itmNm).includes(normBase)) ||
+      items[0]
+    );
+  }
+
+  async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
-      // 1차: ITEM_SEQ(보험코드)로 정확하게 조회
-      if (itemSeq) {
-        const p1 = new URLSearchParams({
-          serviceKey: HIRA_KEY,
-          itmCd: String(itemSeq),
-          numOfRows: '5',
-          pageNo: '1',
-        });
-        const r1 = await fetch(
-          'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + p1,
-          { signal: AbortSignal.timeout(8000) }
-        );
-        if (r1.ok) {
-          const xml1 = await r1.text();
-          const items1 = parseHiraXmlItems(xml1);
-          if (items1.length > 0 && items1[0].mxCprc) {
-            const price = parseFloat(String(items1[0].mxCprc).replace(/,/g, ''));
-            if (!isNaN(price) && price > 0) {
-              console.log('HIRA(itmCd) "' + itemName + '": ' + price);
-              return { price, unit: items1[0].unit || '정' };
-            }
-          }
+      const full = toHiraName(itemName);   // 예: '자누비아정100mg'
+      const baseMatch = full.match(/^([가-힣a-zA-Z]+)/);
+      const base = baseMatch ? baseMatch[1] : full.substring(0, 6); // 예: '자누비아정'
+
+      // 1차: 변환된 전체 이름으로 검색 (더 정확)
+      let items = await queryHira(full, 10);
+      if (items.length > 0) {
+        const best = pickBest(items, full, base);
+        const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
+        if (!isNaN(price) && price > 0) {
+          console.log('HIRA(full) "' + itemName + '": ' + price);
+          return { price, unit: best.unit || '정' };
         }
       }
 
-      // 2차: 한글단위 → 영문 변환 후 기본 품목명으로 검색
-      let word = itemName
-        .replace(/\(.*?\)/g, '')
-        .replace(/밀리그램/g, 'mg')
-        .replace(/마이크로그램/g, 'mcg')
-        .replace(/밀리리터/g, 'ml')
-        .replace(/리터/g, 'L')
-        .replace(/그램/g, 'g')
-        .replace(/단위/g, 'IU')
-        .trim();
-      const baseMatch = word.match(/^([가-힣a-zA-Z]+)/);
-      const searchWord = baseMatch ? baseMatch[1] : word.substring(0, 6);
-      const p2 = new URLSearchParams({
-        serviceKey: HIRA_KEY,
-        itmNm: searchWord,
-        numOfRows: '20',
-        pageNo: '1',
-      });
-      const r2 = await fetch(
-        'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + p2,
-        { signal: AbortSignal.timeout(8000) }
-      );
-      if (!r2.ok) return null;
-      const xml2 = await r2.text();
-      const resultCode = getXmlTag(xml2, 'resultCode');
-      if (resultCode && resultCode !== '00') return null;
-      const items2 = parseHiraXmlItems(xml2);
-      if (items2.length === 0) return null;
-      const normWord = word.replace(/\s/g, '');
-      const normBase = searchWord.replace(/\s/g, '');
-      const best =
-        items2.find(it => (it.itmNm || '').replace(/\s/g, '').includes(normWord)) ||
-        items2.find(it => (it.itmNm || '').replace(/\s/g, '').includes(normBase)) ||
-        items2[0];
-      const priceRaw = best.mxCprc;
-      if (!priceRaw) return null;
-      const price = parseFloat(String(priceRaw).replace(/,/g, ''));
-      if (isNaN(price) || price <= 0) return null;
-      console.log('HIRA(itmNm) "' + itemName + '": ' + price);
-      return { price, unit: best.unit || '정' };
+      // 2차: 기본 품목명으로 검색 (더 넓게)
+      items = await queryHira(base, 20);
+      if (items.length > 0) {
+        const best = pickBest(items, full, base);
+        const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
+        if (!isNaN(price) && price > 0) {
+          console.log('HIRA(base) "' + itemName + '": ' + price);
+          return { price, unit: best.unit || '정' };
+        }
+      }
+
+      console.log('HIRA no price for:', itemName);
+      return null;
     } catch (e) {
       console.error('callHiraPrice error:', e.message);
       return null;
@@ -179,12 +182,12 @@ export default async function handler(req, res) {
       const priceCache = new Map();
       mfdsResult = await Promise.all(mfdsResult.map(async it => {
         try {
-          const cacheKey = it.ITEM_SEQ || it.ITEM_NAME;
+          const cacheKey = it.ITEM_NAME;
           let result;
           if (priceCache.has(cacheKey)) {
             result = priceCache.get(cacheKey);
           } else {
-            result = await callHiraPrice(it.ITEM_NAME, it.ITEM_SEQ);
+            result = await callHiraPrice(it.ITEM_NAME);
             priceCache.set(cacheKey, result);
           }
           return {
