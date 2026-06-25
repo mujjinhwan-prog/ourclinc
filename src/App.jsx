@@ -422,6 +422,7 @@ export default function App() {
           .print-vs .line2{flex:1;height:3px;background:linear-gradient(90deg,#7048e8,#3b5bdb,#fff);border-radius:99px;}
           .print-vs .badge{background:linear-gradient(135deg,#3b5bdb,#7048e8);color:white;font-weight:900;font-size:14pt;padding:6px 22px;border-radius:8px;letter-spacing:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
           .slot-grid{break-inside:avoid;grid-template-columns:repeat(4,1fr) !important;}
+          .print-hide{display:none !important;}
           .pill-1cm{display:flex !important;}
         }
       `}</style>
@@ -508,14 +509,16 @@ export default function App() {
               <div className="print-sub">건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
             </div>
           </div>
-          {rows.map((row,ri)=>(
+          {rows.map((row,ri)=>{
+            const rowHasAny = row.some(({pill}) => pill !== null);
+            return (
             <Fragment key={ri}>
               {ri===1&&(
-                <div className="print-vs">
+                <div className={"print-vs"+(rowHasAny?"":" print-hide")}>
                   <div className="line"/><div className="badge">VS</div><div className="line2"/>
                 </div>
               )}
-              <div className="slot-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:8}}>
+              <div className={"slot-grid"+(rowHasAny?"":" print-hide")} style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:8}}>
                 {row.map(({pill,idx})=>{
                   const isActive=idx===activeSlot, color=ACCENT[idx];
                   return(
@@ -560,7 +563,8 @@ export default function App() {
                 })}
               </div>
             </Fragment>
-          ))}
+            );
+          })}
         </div>
 
         {/* 정보 테이블 */}
