@@ -48,67 +48,58 @@ export default async function handler(req, res) {
     return m ? m[1].trim() : null;
   }
 
-  function toHiraName(itemName) {
+  // ── MFDS 품목명에서 "(성분/규격)" 같은 괄호 정보만 제거 ────────────────────
+  // 예: "직듀오서방정10/1000밀리그램(다파글리플로진,메트포르민염산염)" → "직듀오서방정10/1000밀리그램"
+  // 주의: HIRA는 단위를 영문(mg)으로 바꾸지 않고 한글(밀리그램) 그대로 씀!
+  function stripIngredients(itemName) {
     return itemName
-      .replace(/\(.*?\)/g, '')
-      .replace(/밀리그램/g, 'mg')
-      .replace(/마이크로그램/g, 'mcg')
-      .replace(/밀리리터/g, 'ml')
-      .replace(/리터/g, 'L')
-      .replace(/그램/g, 'g')
-      .replace(/단위/g, 'IU')
+      .replace(/\(.*?\)/g, '')   // 괄호(성분) 제거
+      .replace(/\s+/g, '')        // 공백 제거
+      .trim();
+  }
+
+  // ── HIRA itmNm에서 끝에 붙는 "_(1정)" 같은 단위 접미사 제거 ────────────────
+  // 예: "직듀오서방정10/1000밀리그램_(1정)" → "직듀오서방정10/1000밀리그램"
+  function stripHiraSuffix(itmNm) {
+    return (itmNm || '')
+      .replace(/_?\([^)]*\)\s*$/, '')  // 끝의 _(...) 또는 (...) 제거
       .replace(/\s+/g, '')
       .trim();
   }
 
-  // ── HIRA 약가 조회: 대소문자 무시 매칭 + 단계별 시도 ────────────────────────
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
-      const full = toHiraName(itemName);
+      const full = stripIngredients(itemName);                 // "직듀오서방정10/1000밀리그램"
       const baseMatch = full.match(/^([가-힣a-zA-Z]+)/);
-      const base = baseMatch ? baseMatch[1] : full.substring(0, 6);
-      const clean = s => (s || '').replace(/\s/g, '').toLowerCase();
-      const fullL = clean(full);
-      const baseL = clean(base);
+      const base = baseMatch ? baseMatch[1] : full.substring(0, 6); // "직듀오서방정"
+      const fullL = full.toLowerCase();
 
-      async function search(word, rows) {
-        const params = new URLSearchParams({
-          serviceKey: HIRA_KEY, itmNm: word,
-          numOfRows: String(rows), pageNo: '1',
-        });
-        const r = await fetch(
-          'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params,
-          { signal: AbortSignal.timeout(6000) }
-        );
-        if (!r.ok) return [];
-        const xml = await r.text();
-        const rc = getXmlTag(xml, 'resultCode');
-        if (rc && rc !== '00') return [];
-        return parseHiraXmlItems(xml);
-      }
+      const params = new URLSearchParams({
+        serviceKey: HIRA_KEY,
+        itmNm: base,
+        numOfRows: '30',
+        pageNo: '1',
+      });
+      const r = await fetch(
+        'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params,
+        { signal: AbortSignal.timeout(6000) }
+      );
+      if (!r.ok) return null;
+      const xml = await r.text();
+      const rc = getXmlTag(xml, 'resultCode');
+      if (rc && rc !== '00') return null;
+      const items = parseHiraXmlItems(xml);
+      if (!items.length) return null;
 
-      // 1차: 기본명(예: "직듀오서방정")으로 검색
-      let items = await search(base, 30);
-      let best = items.find(it => clean(it.itmNm) === fullL)
-        || items.find(it => clean(it.itmNm).includes(fullL));
-      if (best) {
-        const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
-        if (!isNaN(price) && price > 0) return { price, unit: best.unit || '정' };
-      }
+      // HIRA 품목명에서 단위 접미사 제거 후 비교 (완전일치만 신뢰)
+      const best = items.find(it => stripHiraSuffix(it.itmNm).toLowerCase() === fullL);
 
-      // 2차: 전체 변환명으로 직접 검색 (서방정처럼 base만으로 안 잡히는 경우)
-      items = await search(full, 10);
-      best = items.find(it => clean(it.itmNm) === fullL)
-        || items.find(it => clean(it.itmNm).includes(fullL))
-        || items.find(it => clean(it.itmNm).includes(baseL));
-      if (best) {
-        const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
-        if (!isNaN(price) && price > 0) return { price, unit: best.unit || '정' };
-      }
+      if (!best) return null; // 정확매칭 실패 시 추측하지 않음
 
-      // 정확매칭 실패 시 null (추측하지 않음 — 약가 정확성이 중요하므로)
-      return null;
+      const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
+      if (isNaN(price) || price <= 0) return null;
+      return { price, unit: best.unit || '정' };
     } catch (e) {
       return null;
     }
@@ -170,7 +161,6 @@ export default async function handler(req, res) {
 
     let mfdsResult = filtered.map(normalize);
 
-    // HIRA만 사용 — AI 가격 추측은 부정확할 수 있어 사용하지 않음
     if (mfdsResult.length > 0 && HIRA_KEY) {
       const priceCache = new Map();
       for (const it of mfdsResult) {
