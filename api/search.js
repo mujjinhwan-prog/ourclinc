@@ -61,76 +61,54 @@ export default async function handler(req, res) {
       .trim();
   }
 
-  // ── HIRA 약가 조회 (대소문자 무시 매칭으로 수정) ────────────────────────────
+  // ── HIRA 약가 조회: 대소문자 무시 매칭 + 단계별 시도 ────────────────────────
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
       const full = toHiraName(itemName);
       const baseMatch = full.match(/^([가-힣a-zA-Z]+)/);
       const base = baseMatch ? baseMatch[1] : full.substring(0, 6);
-      // 대소문자 무시 + 공백 제거 정규화
       const clean = s => (s || '').replace(/\s/g, '').toLowerCase();
       const fullL = clean(full);
       const baseL = clean(base);
 
-      const params = new URLSearchParams({
-        serviceKey: HIRA_KEY,
-        itmNm: base,
-        numOfRows: '30',
-        pageNo: '1',
-      });
-      const r = await fetch(
-        'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params,
-        { signal: AbortSignal.timeout(6000) }
-      );
-      if (!r.ok) return null;
-      const xml = await r.text();
-      const rc = getXmlTag(xml, 'resultCode');
-      if (rc && rc !== '00') return null;
-      const items = parseHiraXmlItems(xml);
-      if (!items.length) return null;
+      async function search(word, rows) {
+        const params = new URLSearchParams({
+          serviceKey: HIRA_KEY, itmNm: word,
+          numOfRows: String(rows), pageNo: '1',
+        });
+        const r = await fetch(
+          'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params,
+          { signal: AbortSignal.timeout(6000) }
+        );
+        if (!r.ok) return [];
+        const xml = await r.text();
+        const rc = getXmlTag(xml, 'resultCode');
+        if (rc && rc !== '00') return [];
+        return parseHiraXmlItems(xml);
+      }
 
-      // 완전일치(대소문자무시) → 포함일치(대소문자무시) → 첫번째
-      const best =
-        items.find(it => clean(it.itmNm) === fullL) ||
-        items.find(it => clean(it.itmNm).includes(fullL)) ||
-        items.find(it => clean(it.itmNm).includes(baseL)) ||
-        items[0];
+      // 1차: 기본명(예: "직듀오서방정")으로 검색
+      let items = await search(base, 30);
+      let best = items.find(it => clean(it.itmNm) === fullL)
+        || items.find(it => clean(it.itmNm).includes(fullL));
+      if (best) {
+        const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
+        if (!isNaN(price) && price > 0) return { price, unit: best.unit || '정' };
+      }
 
-      const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
-      if (isNaN(price) || price <= 0) return null;
-      return { price, unit: best.unit || '정' };
-    } catch (e) {
+      // 2차: 전체 변환명으로 직접 검색 (서방정처럼 base만으로 안 잡히는 경우)
+      items = await search(full, 10);
+      best = items.find(it => clean(it.itmNm) === fullL)
+        || items.find(it => clean(it.itmNm).includes(fullL))
+        || items.find(it => clean(it.itmNm).includes(baseL));
+      if (best) {
+        const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
+        if (!isNaN(price) && price > 0) return { price, unit: best.unit || '정' };
+      }
+
+      // 정확매칭 실패 시 null (추측하지 않음 — 약가 정확성이 중요하므로)
       return null;
-    }
-  }
-
-  async function callAiPrice(itemName) {
-    if (!AI_KEY) return null;
-    try {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': AI_KEY,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 100,
-          system: '한국 건강보험 급여 의약품 보험약가(상한금액) 전문가. 숫자만 반환. 모르면 null.',
-          messages: [{
-            role: 'user',
-            content: `"${itemName}"의 건강보험 급여 상한금액(원/정)을 숫자만 답하세요. 급여 미등재면 null.`
-          }]
-        })
-      });
-      const d = await r.json();
-      const text = (d.content || []).map(b => b.text || '').join('').trim();
-      if (!text || text.toLowerCase() === 'null') return null;
-      const price = parseFloat(text.replace(/[^0-9.]/g, ''));
-      if (isNaN(price) || price <= 0) return null;
-      return { price, unit: '정' };
     } catch (e) {
       return null;
     }
@@ -192,18 +170,13 @@ export default async function handler(req, res) {
 
     let mfdsResult = filtered.map(normalize);
 
-    if (mfdsResult.length > 0) {
+    // HIRA만 사용 — AI 가격 추측은 부정확할 수 있어 사용하지 않음
+    if (mfdsResult.length > 0 && HIRA_KEY) {
       const priceCache = new Map();
       for (const it of mfdsResult) {
-        // ITEM_SEQ가 있으면 그걸로, 없으면 ITEM_NAME으로 캐시 키 사용
-        // (같은 이름이라도 ITEM_SEQ가 다르면 다른 품목이므로 둘 다 고려)
         const key = it.ITEM_NAME;
         if (!priceCache.has(key)) {
-          let result = await callHiraPrice(key);
-          if (!result && AI_KEY) {
-            result = await callAiPrice(key);
-          }
-          priceCache.set(key, result);
+          priceCache.set(key, await callHiraPrice(key));
         }
       }
       mfdsResult = mfdsResult.map(it => {
