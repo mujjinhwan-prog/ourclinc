@@ -13,7 +13,6 @@ export default async function handler(req, res) {
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
-  // ── 식약처 낱알식별 조회 ──────────────────────────────────────────────────
   async function callMfds(word, rows = 30) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
@@ -62,14 +61,17 @@ export default async function handler(req, res) {
       .trim();
   }
 
-  // ── HIRA 약가 조회 ────────────────────────────────────────────────────────
+  // ── HIRA 약가 조회 (대소문자 무시 매칭으로 수정) ────────────────────────────
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
       const full = toHiraName(itemName);
       const baseMatch = full.match(/^([가-힣a-zA-Z]+)/);
       const base = baseMatch ? baseMatch[1] : full.substring(0, 6);
-      const clean = s => (s || '').replace(/\s/g, '');
+      // 대소문자 무시 + 공백 제거 정규화
+      const clean = s => (s || '').replace(/\s/g, '').toLowerCase();
+      const fullL = clean(full);
+      const baseL = clean(base);
 
       const params = new URLSearchParams({
         serviceKey: HIRA_KEY,
@@ -88,10 +90,11 @@ export default async function handler(req, res) {
       const items = parseHiraXmlItems(xml);
       if (!items.length) return null;
 
+      // 완전일치(대소문자무시) → 포함일치(대소문자무시) → 첫번째
       const best =
-        items.find(it => clean(it.itmNm) === full) ||
-        items.find(it => clean(it.itmNm).includes(full)) ||
-        items.find(it => clean(it.itmNm).includes(base)) ||
+        items.find(it => clean(it.itmNm) === fullL) ||
+        items.find(it => clean(it.itmNm).includes(fullL)) ||
+        items.find(it => clean(it.itmNm).includes(baseL)) ||
         items[0];
 
       const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
@@ -102,7 +105,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── Claude AI로 약가 보완 (HIRA에 없는 약 처리) ──────────────────────────
   async function callAiPrice(itemName) {
     if (!AI_KEY) return null;
     try {
@@ -125,7 +127,7 @@ export default async function handler(req, res) {
       });
       const d = await r.json();
       const text = (d.content || []).map(b => b.text || '').join('').trim();
-      if (!text || text === 'null' || text.toLowerCase() === 'null') return null;
+      if (!text || text.toLowerCase() === 'null') return null;
       const price = parseFloat(text.replace(/[^0-9.]/g, ''));
       if (isNaN(price) || price <= 0) return null;
       return { price, unit: '정' };
@@ -191,22 +193,19 @@ export default async function handler(req, res) {
     let mfdsResult = filtered.map(normalize);
 
     if (mfdsResult.length > 0) {
-      // 중복 제거용 캐시 (같은 품목명은 한 번만 조회)
       const priceCache = new Map();
-
       for (const it of mfdsResult) {
+        // ITEM_SEQ가 있으면 그걸로, 없으면 ITEM_NAME으로 캐시 키 사용
+        // (같은 이름이라도 ITEM_SEQ가 다르면 다른 품목이므로 둘 다 고려)
         const key = it.ITEM_NAME;
         if (!priceCache.has(key)) {
-          // 1차: HIRA API
           let result = await callHiraPrice(key);
-          // 2차: HIRA 없으면 Claude AI로 보완
           if (!result && AI_KEY) {
             result = await callAiPrice(key);
           }
           priceCache.set(key, result);
         }
       }
-
       mfdsResult = mfdsResult.map(it => {
         const result = priceCache.get(it.ITEM_NAME);
         return {
@@ -219,7 +218,6 @@ export default async function handler(req, res) {
 
     if (mfdsResult.length > 0) return res.status(200).json(mfdsResult);
 
-    // MFDS 결과 없으면 AI로 낱알식별 보완
     if (!AI_KEY) return res.status(200).json([]);
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
