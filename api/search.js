@@ -48,36 +48,39 @@ export default async function handler(req, res) {
     return m ? m[1].trim() : null;
   }
 
-  // ── MFDS 품목명에서 "(성분/규격)" 같은 괄호 정보만 제거 ────────────────────
-  // 예: "직듀오서방정10/1000밀리그램(다파글리플로진,메트포르민염산염)" → "직듀오서방정10/1000밀리그램"
-  // 주의: HIRA는 단위를 영문(mg)으로 바꾸지 않고 한글(밀리그램) 그대로 씀!
-  function stripIngredients(itemName) {
-    return itemName
-      .replace(/\(.*?\)/g, '')   // 괄호(성분) 제거
-      .replace(/\s+/g, '')        // 공백 제거
+  // 모든 괄호·접미사·공백·단위변환 제거 후 순수 약품명+용량만 추출
+  // 대소문자 무시, 한글/영문 단위 모두 정규화
+  function normName(s) {
+    return (s || '')
+      .replace(/\(.*?\)/g, '')      // 모든 괄호 제거
+      .replace(/_.*$/, '')          // _ 이후 제거 (_(1정) 등)
+      .replace(/밀리그램/g, 'mg')
+      .replace(/마이크로그램/g, 'mcg')
+      .replace(/밀리리터/g, 'ml')
+      .replace(/리터/g, 'L')
+      .replace(/그램/g, 'g')
+      .replace(/단위/g, 'IU')
+      .replace(/\s+/g, '')
+      .toLowerCase()
       .trim();
   }
 
-  // ── HIRA itmNm 정리: 끝 단위접미사 "_(1정)" 제거 + 중간 성분괄호도 모두 제거 ──
-  // 예1: "직듀오서방정10/1000밀리그램_(1정)" → "직듀오서방정10/1000밀리그램"
-  // 예2: "네시나정25밀리그램(알로글립틴벤조산염)_(1정)" → "네시나정25밀리그램"
-  //      (성분 괄호가 단위접미사 앞에 하나 더 붙는 경우가 있음 — 전부 제거해야 함)
-  function stripHiraSuffix(itmNm) {
-    let s = (itmNm || '');
-    s = s.replace(/_\([^)]*\)\s*$/, '');   // 끝의 _(...) 먼저 제거
-    s = s.replace(/\([^)]*\)\s*$/, '');     // 혹시 언더스코어 없이 끝나는 (...) 도 제거
-    s = s.replace(/\(.*?\)/g, '');            // 남은 모든 괄호(성분정보 등) 제거
-    s = s.replace(/\s+/g, '').trim();
-    return s;
+  // 숫자+단위 추출 (용량 비교용)
+  // 예: "직듀오서방정10/500mg" → "10/500mg"
+  function extractDose(s) {
+    const m = normName(s).match(/[\d./]+[a-z]+.*/);
+    return m ? m[0] : '';
   }
 
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
     try {
-      const full = stripIngredients(itemName);                 // "직듀오서방정10/1000밀리그램"
-      const baseMatch = full.match(/^([가-힣a-zA-Z]+)/);
-      const base = baseMatch ? baseMatch[1] : full.substring(0, 6); // "직듀오서방정"
-      const fullL = full.toLowerCase();
+      const mfdsNorm = normName(itemName);
+      const mfdsDose = extractDose(itemName);
+
+      // base: 한글+영문 앞부분만 (숫자 전까지)
+      const baseMatch = mfdsNorm.match(/^([가-힣a-z]+)/);
+      const base = baseMatch ? baseMatch[1] : mfdsNorm.substring(0, 6);
 
       const params = new URLSearchParams({
         serviceKey: HIRA_KEY,
@@ -96,10 +99,23 @@ export default async function handler(req, res) {
       const items = parseHiraXmlItems(xml);
       if (!items.length) return null;
 
-      // HIRA 품목명에서 단위 접미사 제거 후 비교 (완전일치만 신뢰)
-      const best = items.find(it => stripHiraSuffix(it.itmNm).toLowerCase() === fullL);
+      // 가격이 있는 항목만 추려서 작업
+      const priced = items.filter(it => {
+        const p = parseFloat(String(it.mxCprc || '').replace(/,/g, ''));
+        return !isNaN(p) && p > 0;
+      });
+      if (!priced.length) return null;
 
-      if (!best) return null; // 정확매칭 실패 시 추측하지 않음
+      // 1순위: 정규화 이름 완전일치
+      let best = priced.find(it => normName(it.itmNm) === mfdsNorm);
+
+      // 2순위: 용량만 비교 (용량이 있는 경우)
+      if (!best && mfdsDose) {
+        best = priced.find(it => normName(it.itmNm).includes(mfdsDose));
+      }
+
+      // 3순위: priced 중 첫 번째 (단일 품목인 경우)
+      if (!best) best = priced[0];
 
       const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
       if (isNaN(price) || price <= 0) return null;
