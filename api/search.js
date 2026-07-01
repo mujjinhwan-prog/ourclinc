@@ -74,6 +74,7 @@ export default async function handler(req, res) {
 
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
+    itemName = (itemName || "").trim();  // MFDS 품목명 끝 공백 제거
     try {
       const mfdsNorm = normName(itemName);
       const mfdsDose = extractDose(itemName);
