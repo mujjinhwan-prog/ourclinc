@@ -430,7 +430,7 @@ export default function App() {
       {/* 헤더 */}
       <div className="no-print" style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 16px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
         <div className="app-header-inner" style={{maxWidth:1400,margin:"0 auto",height:60,display:"flex",alignItems:"center",gap:12}}>
-          <img className="app-logo" src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" style={{height:44,width:"auto",objectFit:"contain",flexShrink:0}}/>
+          <img className="app-logo" src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png?v=2" alt="logo" style={{height:44,width:"auto",objectFit:"contain",flexShrink:0}}/>
           <div style={{width:1,height:28,background:"#e2e8f0",flexShrink:0}}/>
           <div style={{minWidth:0}}>
             <div className="app-title" style={{fontSize:FS.xl,fontWeight:700,color:"#1a1f36"}}>약품 실제 크기 비교</div>
@@ -503,7 +503,7 @@ export default function App() {
         {/* 슬롯 그리드 */}
         <div id="printArea">
           <div className="print-only-header">
-            <img className="print-logo" src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png" alt="logo" onError={e=>{e.target.style.display="none";}}/>
+            <img className="print-logo" src="https://raw.githubusercontent.com/mujjinhwan-prog/ourclinc/main/yh_namu.png?v=2" alt="logo" onError={e=>{e.target.style.display="none";}}/>
             <div>
               <div className="print-title">약품 실제 크기 비교표</div>
               <div className="print-sub">건강보험심사평가원·식품의약품안전처 자료 기반 의약품 순응도 개선 비교 데이터</div>
