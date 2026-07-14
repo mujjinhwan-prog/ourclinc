@@ -384,8 +384,18 @@ export default function App() {
     return()=>document.removeEventListener("mousedown",h);
   },[]);
 
+  // 결과가 너무 많은 범용 검색어 목록 (API 타임아웃 방지)
+  const BROAD_KEYWORDS = ["메트포르민","아스피린","비타민","오메프라졸","암로디핀","아토르바스타틴","클로피도그렐","로수바스타틴"];
   const doSearch=useCallback(async q=>{
     if(!q||q.length<2)return;
+    // 범용 키워드 경고: 검색어가 너무 일반적이면 더 구체적으로 유도
+    const isBroad = BROAD_KEYWORDS.some(kw => q.replace(/\s/g,"").includes(kw) && q.replace(/\s/g,"").length <= kw.length+2);
+    if(isBroad){
+      setShowDrop(true);
+      setError("⚠️ 검색 결과가 너무 많아 느릴 수 있습니다. 예: '유한메트포르민' 또는 '다이아벡스' 처럼 더 구체적인 이름으로 검색해주세요.");
+      setResults([]);
+      setLoading(false);
+    }
     setLoading(true);setError("");setShowDrop(true);setResults([]);
     try{const r=await fetchDrug(q);setResults(r);if(!r.length)setError("결과 없음.");}
     catch(e){setError("조회 실패: "+e.message);}
