@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
   // ── 식약처 낱알식별 조회 ─────────────────────────────────────────────────────
-  async function callMfds(word, rows = 10) {
+  async function callMfds(word, rows = 20) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
       type: 'json', numOfRows: String(rows), pageNo: '1',
