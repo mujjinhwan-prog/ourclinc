@@ -390,12 +390,6 @@ export default function App() {
     if(!q||q.length<2)return;
     // 범용 키워드 경고: 검색어가 너무 일반적이면 더 구체적으로 유도
     const isBroad = BROAD_KEYWORDS.some(kw => q.replace(/\s/g,"").includes(kw) && q.replace(/\s/g,"").length <= kw.length+2);
-    if(isBroad){
-      setShowDrop(true);
-      setError("⚠️ 검색 결과가 너무 많아 느릴 수 있습니다. 예: '유한메트포르민' 또는 '다이아벡스' 처럼 더 구체적인 이름으로 검색해주세요.");
-      setResults([]);
-      setLoading(false);
-    }
     setLoading(true);setError("");setShowDrop(true);setResults([]);
     try{const r=await fetchDrug(q);setResults(r);if(!r.length)setError("결과 없음.");}
     catch(e){setError("조회 실패: "+e.message);}
@@ -540,7 +534,7 @@ export default function App() {
       <div className="main-content" style={{maxWidth:1400,margin:"0 auto",padding:"14px 12px 60px"}}>
         {/* ─── 검색 패널 (인쇄 시 숨김) ─── */}
         <div className="no-print search-panel" style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
-          <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:10,position:"relative",zIndex:200,maxWidth:"50%"}}>
+          <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:4,position:"relative",zIndex:200,maxWidth:"50%"}}>
             <div className="sbinput" style={{flex:1,position:"relative",minWidth:0}} ref={inRef}>
               <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:FS.lg,pointerEvents:"none",color:"#94a3b8"}}>🔍</span>
               <input value={query} onChange={handleInput} onKeyDown={handleKey}
@@ -580,6 +574,9 @@ export default function App() {
           </div>
 
           {/* ─── 컨트롤 바: 초기화 · 인쇄 · 약가제외 체크박스 한 줄 정리 ─── */}
+          <div style={{fontSize:FS.xs,color:"#94a3b8",marginBottom:6,paddingLeft:2}}>
+            💡 결과가 많은 성분명(아스피린·메트포르민·암로디핀 등)은 <b style={{color:"#6366f1"}}>정확한 제품명</b>으로 검색하면 더 빠르고 정확합니다.
+          </div>
           <div className="control-bar" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <button className="btn-r" onClick={resetAll} style={{padding:"10px 16px",background:hasAny?"#fee2e2":"#f1f5f9",border:"1.5px solid "+(hasAny?"#fecaca":"#e2e8f0"),borderRadius:10,color:hasAny?"#dc2626":"#94a3b8",fontSize:FS.lg,fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.2s"}}>🔄 초기화</button>
             <button className="btn-p" onClick={handlePrint} disabled={!hasAny} style={{padding:"10px 16px",background:hasAny?"linear-gradient(135deg,#0ca678,#2f9e44)":"#f1f5f9",border:"1.5px solid "+(hasAny?"#0ca678":"#e2e8f0"),borderRadius:10,color:hasAny?"white":"#94a3b8",fontSize:FS.lg,fontWeight:700,fontFamily:"inherit",cursor:hasAny?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s",boxShadow:hasAny?"0 2px 10px rgba(12,166,120,0.3)":"none"}}>🖨️ 인쇄</button>
