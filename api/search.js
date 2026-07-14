@@ -13,7 +13,8 @@ export default async function handler(req, res) {
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
-  async function callMfds(word, rows = 30) {
+  // ── 식약처 낱알식별 조회 ─────────────────────────────────────────────────────
+  async function callMfds(word, rows = 10) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
       type: 'json', numOfRows: String(rows), pageNo: '1',
@@ -30,10 +31,14 @@ export default async function handler(req, res) {
     return [];
   }
 
+  // 간단한 XML → 객체 배열 파서 (<item>...</item> 반복 구조 전용)
+  // HIRA API가 type=json을 줘도 XML로만 응답하므로 직접 파싱
   function parseHiraXmlItems(xml) {
     const items = [];
     const itemBlocks = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
     for (const blockFull of itemBlocks) {
+      // <item> 바깥 태그 자체를 제거하고 내부 필드 태그만 남겨서 파싱
+      // (제거 안 하면 정규식이 <item>...</item> 전체를 하나의 필드로 잘못 매칭함)
       const inner = blockFull.replace(/^<item>/, '').replace(/<\/item>$/, '');
       const obj = {};
       const fieldMatches = inner.matchAll(/<(\w+)>([\s\S]*?)<\/\1>/g);
@@ -42,86 +47,49 @@ export default async function handler(req, res) {
     }
     return items;
   }
-
   function getXmlTag(xml, tag) {
-    const m = xml.match(new RegExp('<' + tag + '>([\\s\\S]*?)<\\/' + tag + '>'));
+    const m = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
     return m ? m[1].trim() : null;
   }
 
-  // 모든 괄호·접미사·공백·단위변환 제거 후 순수 약품명+용량만 추출
-  // 대소문자 무시, 한글/영문 단위 모두 정규화
-  function normName(s) {
-    return (s || '')
-      .replace(/\(.*?\)/g, '')      // 모든 괄호 제거
-      .replace(/_.*$/, '')          // _ 이후 제거 (_(1정) 등)
-      .replace(/밀리그램/g, 'mg')
-      .replace(/마이크로그램/g, 'mcg')
-      .replace(/밀리리터/g, 'ml')
-      .replace(/리터/g, 'L')
-      .replace(/그램/g, 'g')
-      .replace(/단위/g, 'IU')
-      .replace(/\s+/g, '')
-      .toLowerCase()
-      .trim();
-  }
-
-  // 숫자+단위 추출 (용량 비교용)
-  // 예: "직듀오서방정10/500mg" → "10/500mg"
-  function extractDose(s) {
-    const m = normName(s).match(/[\d./]+[a-z]+.*/);
-    return m ? m[0] : '';
-  }
-
+  // ── HIRA 약가기준정보조회서비스: 품목명으로 상한금액(mxCprc) 조회 ───────────
+  // https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList (응답 XML 고정)
   async function callHiraPrice(itemName) {
     if (!HIRA_KEY) return null;
-    itemName = (itemName || "").trim();  // MFDS 품목명 끝 공백 제거
     try {
-      const mfdsNorm = normName(itemName);
-      const mfdsDose = extractDose(itemName);
-
-      // base: 한글+영문 앞부분만 (숫자 전까지)
-      const baseMatch = mfdsNorm.match(/^([가-힣a-z]+)/);
-      const base = baseMatch ? baseMatch[1] : mfdsNorm.substring(0, 6);
-
+      const word = itemName.replace(/\(.*?\)/g, '').trim();
       const params = new URLSearchParams({
         serviceKey: HIRA_KEY,
-        itmNm: base,
-        numOfRows: '30',
+        itmNm: word,
+        numOfRows: '10',
         pageNo: '1',
       });
-      const r = await fetch(
-        'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params,
-        { signal: AbortSignal.timeout(6000) }
-      );
-      if (!r.ok) return null;
+      const url = 'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params;
+      const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) { console.log('HIRA price fetch failed:', r.status); return null; }
+
       const xml = await r.text();
-      const rc = getXmlTag(xml, 'resultCode');
-      if (rc && rc !== '00') return null;
-      const items = parseHiraXmlItems(xml);
-      if (!items.length) return null;
-
-      // 가격이 있는 항목만 추려서 작업
-      const priced = items.filter(it => {
-        const p = parseFloat(String(it.mxCprc || '').replace(/,/g, ''));
-        return !isNaN(p) && p > 0;
-      });
-      if (!priced.length) return null;
-
-      // 1순위: 정규화 이름 완전일치
-      let best = priced.find(it => normName(it.itmNm) === mfdsNorm);
-
-      // 2순위: 용량만 비교 (용량이 있는 경우)
-      if (!best && mfdsDose) {
-        best = priced.find(it => normName(it.itmNm).includes(mfdsDose));
+      const resultCode = getXmlTag(xml, 'resultCode');
+      if (resultCode && resultCode !== '00') {
+        console.log('HIRA price API error:', resultCode, getXmlTag(xml, 'resultMsg'));
+        return null;
       }
 
-      // 3순위: priced 중 첫 번째 (단일 품목인 경우)
-      if (!best) best = priced[0];
+      const items = parseHiraXmlItems(xml);
+      if (items.length === 0) { console.log('HIRA price no items for:', word); return null; }
 
-      const price = parseFloat(String(best.mxCprc || '').replace(/,/g, ''));
+      const keyword = word.replace(/\s/g, '');
+      const best = items.find(it => (it.itmNm || '').replace(/\s/g, '').includes(keyword)) || items[0];
+
+      const priceRaw = best.mxCprc;
+      if (priceRaw === undefined || priceRaw === null || priceRaw === '') return null;
+      const price = parseFloat(String(priceRaw).replace(/,/g, ''));
       if (isNaN(price) || price <= 0) return null;
+
+      console.log(`HIRA price "${itemName}" -> ${best.itmNm}: ${price} ${best.unit || '정'}`);
       return { price, unit: best.unit || '정' };
     } catch (e) {
+      console.error('callHiraPrice error:', e.message);
       return null;
     }
   }
@@ -138,8 +106,8 @@ export default async function handler(req, res) {
       DRUG_SHPE:      it.DRUG_SHAPE      || it.DRUG_SHPE || '',
       DRUG_COLO:      it.COLOR_CLASS1    || it.DRUG_COLO || it.DRUG_COLO_FRONT || '',
       DRUG_COLO_BACK: it.COLOR_CLASS2    || it.DRUG_COLO_BACK || '',
-      PRINT_FRONT:    it.MARK_CODE_FRONT || it.PRINT_FRONT || '',
-      PRINT_BACK:     it.MARK_CODE_BACK  || it.PRINT_BACK  || '',
+      PRINT_FRONT:    it.MARK_CODE_FRONT || it.PRINT_FRONT     || '',
+      PRINT_BACK:     it.MARK_CODE_BACK  || it.PRINT_BACK      || '',
       FORM_CODE_NAME: it.FORM_CODE_NAME  || '',
       ETC_OTC_NAME:   it.ETC_OTC_NAME    || '',
       LNGS_STDR:      long,
@@ -182,16 +150,23 @@ export default async function handler(req, res) {
 
     let mfdsResult = filtered.map(normalize);
 
+    // ── HIRA 보험가(상한금액) 조회 ──────────────────────────────────────────────
+    // 최대 8개로 제한 + 약품명 기준 중복 캐시로 실제 API 호출 최소화
     if (mfdsResult.length > 0 && HIRA_KEY) {
+      mfdsResult = mfdsResult.slice(0, 8); // 슬롯 8개 이상은 불필요
       const priceCache = new Map();
-      for (const it of mfdsResult) {
-        const key = it.ITEM_NAME;
-        if (!priceCache.has(key)) {
-          priceCache.set(key, await callHiraPrice(key));
+      // 고유 약품명만 추려서 먼저 HIRA 조회 (병렬)
+      const uniqueNames = [...new Set(mfdsResult.map(it => it.ITEM_NAME))];
+      await Promise.all(uniqueNames.map(async name => {
+        try {
+          const result = await callHiraPrice(name);
+          priceCache.set(name, result);
+        } catch(e) {
+          priceCache.set(name, null);
         }
-      }
+      }));
       mfdsResult = mfdsResult.map(it => {
-        const result = priceCache.get(it.ITEM_NAME);
+        const result = priceCache.get(it.ITEM_NAME) || null;
         return {
           ...it,
           PRICE:      result ? result.price : null,
@@ -202,6 +177,7 @@ export default async function handler(req, res) {
 
     if (mfdsResult.length > 0) return res.status(200).json(mfdsResult);
 
+    // ── AI 낱알식별 보완 ───────────────────────────────────────────────────────
     if (!AI_KEY) return res.status(200).json([]);
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -216,7 +192,9 @@ export default async function handler(req, res) {
         system: 'Korean pharmaceutical database. Return ONLY JSON array. No markdown.',
         messages: [{
           role: 'user',
-          content: q + ' 약품 낱알식별 JSON 배열.\n[{"ITEM_NAME":"품목명","DRUG_SHPE":"원형","DRUG_COLO":"분홍","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","PRICE":null,"PRICE_UNIT":"정"}]\n없으면[].'
+          content: q + ` 약품 낱알식별 JSON 배열.
+[{"ITEM_NAME":"품목명","DRUG_SHPE":"원형","DRUG_COLO":"분홍","FORM_CODE_NAME":"필름코팅정","ETC_OTC_NAME":"전문의약품","LNGS_STDR":8.2,"SHRT_STDR":8.2,"THICK":4.1,"CLASS_NAME":"당뇨병용제","PRICE":null,"PRICE_UNIT":"정"}]
+없으면[].`
         }]
       })
     });
