@@ -564,7 +564,7 @@ export default function App() {
         }
 
         /* ── 태블릿 가로모드 전용: 8개 슬롯(4+4)이 스크롤 없이 한 화면에 들어오도록 전체적으로 컴팩트하게 ── */
-        @media (min-width:900px) and (max-width:1400px), (min-width:900px) and (max-height:950px){
+        @media (min-width:900px) and (max-width:1400px){
           .app-header-inner{height:42px !important;}
           .app-logo{height:26px !important;}
           .app-header-divider{height:22px !important;}
@@ -601,10 +601,10 @@ export default function App() {
         <div className="no-print search-panel" style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
           <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:4,position:"relative",zIndex:200}}>
             <div className="sbinput" style={{flex:1,position:"relative",minWidth:0}} ref={inRef}>
-              <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:FS.lg,pointerEvents:"none",color:"#94a3b8"}}>🔍</span>
+              <span style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",fontSize:FS.lg,pointerEvents:"none",color:"#94a3b8"}}>🔍</span>
               <input value={query} onChange={handleInput} onKeyDown={handleKey}
                 placeholder="약품명 입력 (예: 자디앙, 트라젠타, 트윈스타...)"
-                style={{width:"100%",padding:"13px 16px 13px 42px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:FS.xl,fontFamily:"inherit",color:"#1a1f36",background:"#f8fafc",outline:"none",transition:"all 0.2s"}}
+                style={{width:"100%",padding:"13px 20px 13px 50px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:FS.xl,fontFamily:"inherit",color:"#1a1f36",background:"#f8fafc",outline:"none",transition:"all 0.2s"}}
                 onFocus={e=>{e.target.style.borderColor="#3b5bdb";e.target.style.boxShadow="0 0 0 3px rgba(59,91,219,0.12)";if(results.length)setShowDrop(true);}}
                 onBlur={e=>{e.target.style.borderColor="#e2e8f0";e.target.style.boxShadow="none";}}/>
               {showDrop&&(
@@ -647,7 +647,7 @@ export default function App() {
           </div>
 
           {/* ─── 컨트롤 바: 초기화 · 인쇄 · 약가제외 체크박스 한 줄 정리 ─── */}
-          <div style={{fontSize:FS.xs,color:"#94a3b8",marginBottom:6,paddingLeft:2}}>
+          <div style={{fontSize:13,color:"#94a3b8",marginBottom:6,paddingLeft:2}}>
             💡 결과가 많은 성분명(아스피린·메트포르민·암로디핀 등)은 <b style={{color:"#6366f1"}}>정확한 제품명</b>으로 검색하면 더 빠르고 정확합니다.
           </div>
           <div className="control-bar" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
