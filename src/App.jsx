@@ -90,16 +90,16 @@ function darken(hex, amt=30) {
 
 const ACCENT = ["#3b5bdb","#7048e8","#0ca678","#e67700","#c2255c","#1098ad","#2f9e44","#862e9c"];
 
-async function fetchDrug(query, signal) {
+async function fetchDrug(query, signal, page=1) {
   const r = await fetch("/api/search", {
     method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({query}), signal
+    body:JSON.stringify({query, page}), signal
   });
   if (!r.ok) throw new Error("서버 오류: " + r.status);
   const raw = await r.json();
   if (raw.error) throw new Error(raw.error);
   return raw.filter(it => it.LNGS_STDR && it.SHRT_STDR).map((it,i) => ({
-    id:(it.ITEM_NAME||"p")+"_"+i,
+    id:(it.ITEM_SEQ||it.ITEM_NAME||"p")+"_"+page+"_"+i,
     name:it.ITEM_NAME||"",
     entpName:it.ENTP_NAME||"",
     width:parseFloat(it.LNGS_STDR)||0,
@@ -355,7 +355,7 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   );
 }
 
-const MAX=8, ROW=4;
+const MAX=8, ROW=4, PAGE_SIZE=10; // PAGE_SIZE는 서버(api/search.js)와 동일하게 유지
 
 export default function App() {
   const [slots,setSlots]           = useState(Array(MAX).fill(null));
@@ -369,6 +369,9 @@ export default function App() {
   const [dpiInfo,setDpiInfo]       = useState("DPI 측정 중...");
   const [ppiInput,setPpiInput]     = useState("");
   const [hidePrice,setHidePrice]   = useState(false);  // 약가제외: 체크 시 화면·인쇄 모두에서 보험가 숨김
+  const [page,setPage]             = useState(1);
+  const [hasMore,setHasMore]       = useState(false);
+  const [loadingMore,setLoadingMore] = useState(false);
   const debRef=useRef(null), inRef=useRef(null), dropRef=useRef(null), abortRef=useRef(null);
 
   // ── 폰트 스케일: 기존 대비 1.5배 ──
@@ -407,10 +410,11 @@ export default function App() {
     abortRef.current?.abort();
     const controller=new AbortController();
     abortRef.current=controller;
-    setLoading(true);setError("");setShowDrop(true);setResults([]);
+    setLoading(true);setError("");setShowDrop(true);setResults([]);setPage(1);setHasMore(false);
     try{
-      const r=await fetchDrug(q,controller.signal);
+      const r=await fetchDrug(q,controller.signal,1);
       setResults(r);
+      setHasMore(r.length===PAGE_SIZE);
       if(!r.length)setError(isBroad?"결과 없음. 제품명을 더 구체적으로 입력해보세요.":"결과 없음.");
     }
     catch(e){
@@ -419,6 +423,26 @@ export default function App() {
     }
     finally{if(abortRef.current===controller)setLoading(false);}
   },[]);
+
+  const loadMore=useCallback(async ()=>{
+    if(loadingMore||!hasMore||!query||query.length<2)return;
+    abortRef.current?.abort();
+    const controller=new AbortController();
+    abortRef.current=controller;
+    const nextPage=page+1;
+    setLoadingMore(true);
+    try{
+      const r=await fetchDrug(query,controller.signal,nextPage);
+      setResults(prev=>[...prev,...r]);
+      setPage(nextPage);
+      setHasMore(r.length===PAGE_SIZE);
+    }catch(e){
+      if(e.name==="AbortError")return;
+      setHasMore(false);
+    }finally{
+      if(abortRef.current===controller)setLoadingMore(false);
+    }
+  },[query,page,hasMore,loadingMore]);
 
   const handleInput=e=>{const v=e.target.value;setQuery(v);clearTimeout(debRef.current);
     if(v.length>=2)debRef.current=setTimeout(()=>doSearch(v),750);else setShowDrop(false);};
@@ -434,7 +458,7 @@ export default function App() {
     for(let i=activeSlot+1;i<MAX;i++)if(!ns[i]){next=i;break;}
     if(next===-1)for(let i=0;i<activeSlot;i++)if(!ns[i]){next=i;break;}
     if(next!==-1)setActiveSlot(next);
-    setQuery("");setShowDrop(false);setResults([]);
+    setQuery("");setShowDrop(false);setResults([]);setHasMore(false);
     // 보험가는 슬롯에 실제로 선택된 뒤에만 조회 — 그 사이 슬롯이 바뀌거나
     // 비워졌으면(id 불일치) 결과를 버리고 반영하지 않음
     fetchPrice(item.name).then(({price,unit})=>{
@@ -448,7 +472,7 @@ export default function App() {
   };
   const clickSlot=idx=>setActiveSlot(idx);
   const removeSlot=(e,idx)=>{e.stopPropagation();const ns=[...slots];ns[idx]=null;setSlots(ns);setActiveSlot(idx);};
-  const resetAll=()=>{setSlots(Array(MAX).fill(null));setActiveSlot(0);setQuery("");setResults([]);setShowDrop(false);};
+  const resetAll=()=>{setSlots(Array(MAX).fill(null));setActiveSlot(0);setQuery("");setResults([]);setShowDrop(false);setHasMore(false);};
   const applyPPI=()=>{const v=parseInt(ppiInput);if(!v||v<72||v>600)return;
     const ppm=v/25.4;setPxPerMm(ppm);setDpiInfo(v+" PPI (수동) · "+ppm.toFixed(2)+"px/mm");};
 
@@ -575,7 +599,7 @@ export default function App() {
       <div className="main-content" style={{maxWidth:1400,margin:"0 auto",padding:"14px 12px 60px"}}>
         {/* ─── 검색 패널 (인쇄 시 숨김) ─── */}
         <div className="no-print search-panel" style={{background:"white",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
-          <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:4,position:"relative",zIndex:200,maxWidth:"50%"}}>
+          <div className="sbwrap" style={{display:"flex",gap:8,marginBottom:4,position:"relative",zIndex:200}}>
             <div className="sbinput" style={{flex:1,position:"relative",minWidth:0}} ref={inRef}>
               <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:FS.lg,pointerEvents:"none",color:"#94a3b8"}}>🔍</span>
               <input value={query} onChange={handleInput} onKeyDown={handleKey}
@@ -608,6 +632,14 @@ export default function App() {
                         <span style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:5,padding:"3px 8px",fontSize:FS.base,fontFamily:"monospace",color:"#3b5bdb",whiteSpace:"nowrap"}}>{r.width}x{r.height}mm</span>
                       </div>);
                   })}
+                  {!loading&&!error&&hasMore&&(
+                    <button onClick={loadMore} disabled={loadingMore}
+                      style={{width:"100%",padding:"11px 16px",border:"none",borderTop:"1px solid #f1f5f9",background:"#f8fafc",color:"#3b5bdb",fontSize:FS.base,fontWeight:700,fontFamily:"inherit",cursor:loadingMore?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                      {loadingMore
+                        ? <><div style={{width:14,height:14,border:"2px solid #dbe4ff",borderTopColor:"#3b5bdb",borderRadius:"50%",animation:"spin 0.6s linear infinite"}}/>불러오는 중...</>
+                        : "결과 더 보기 ↓"}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
