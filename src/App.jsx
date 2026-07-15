@@ -660,8 +660,6 @@ export default function App() {
           </div>
         </div>
 
-        </div>
-
         {/* ─── 슬롯 그리드: 1~8번(2줄) 항상 모두 표시, 인쇄 시 printArea만 출력 ─── */}
         <div id="printArea">
           <div className="print-only-header">
@@ -687,7 +685,7 @@ export default function App() {
                 const pillBg=pill?.colorCss||null;
                 return(
                   <div key={idx} className="slot-card" onClick={()=>clickSlot(idx)}
-                    style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",height:278,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
+                    style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",minHeight:288,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"visible"}}
                     onMouseEnter={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f0f4ff";}}
                     onMouseLeave={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f8fafc";}}>
                     {pill?(
@@ -697,8 +695,8 @@ export default function App() {
                           <span style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0,display:"inline-block"}}/>
                           <span style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"keep-all",textAlign:"center"}}>{pill.name}</span>
                         </div>
-                        <div className="pill-shape-box" style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:90,overflow:"hidden"}}>
-                          <div style={{maxWidth:"100%",maxHeight:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <div className="pill-shape-box" style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:100,overflow:"visible"}}>
+                          <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
                             <PillShapeEl pill={pill} pxPerMm={pxPerMm} accentColor={color}/>
                           </div>
                         </div>
@@ -783,6 +781,7 @@ export default function App() {
             </div>
           </div>
         )}
+      </div>
       </div>
   );
 }
