@@ -505,7 +505,7 @@ export default function App() {
   ];
 
   return (
-    <div style={{fontFamily:"'Noto Sans KR',sans-serif",background:"#f0f4f8",minHeight:"100vh",color:"#1a1f36"}}>
+    <div className="app-shell" style={{fontFamily:"'Noto Sans KR',sans-serif",background:"#f0f4f8",minHeight:"100vh",color:"#1a1f36"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
         @keyframes dropIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
@@ -540,6 +540,9 @@ export default function App() {
           .slot-grid{break-inside:avoid;grid-template-columns:repeat(4,1fr) !important;}
           /* 인쇄 시 1페이지만 출력: 두 번째 페이지로 넘어가지 않도록 전체 인쇄 영역 높이 제한 */
           #printArea{max-height:185mm;overflow:hidden;}
+          /* 인쇄 페이지 안에서 슬롯 카드 영역이 위쪽에 붙지 않고 세로 중앙에 오도록 */
+          .app-shell{display:flex !important;align-items:center !important;justify-content:center !important;min-height:100vh !important;}
+          .main-content{padding:0 !important;width:100% !important;}
         }
 
         /* ── 모바일 전용 스타일: PC 화면(인라인 스타일)은 전혀 건드리지 않음 ── */
@@ -737,7 +740,7 @@ export default function App() {
 
         {/* ─── 정보 테이블 ─── */}
         {hasAny&&(
-          <div style={{background:"white",borderRadius:16,overflow:"hidden",boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
+          <div className="no-print" style={{background:"white",borderRadius:16,overflow:"hidden",boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3"}}>
             <div style={{padding:"13px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{fontSize:FS.base,fontFamily:"monospace",color:"#3b5bdb",display:"flex",alignItems:"center",gap:7}}><span style={{width:7,height:7,background:"#3b5bdb",borderRadius:"50%",display:"inline-block"}}/>약품 정보</div>
               <div style={{fontSize:FS.base,color:"#64748b"}}>{filledSlots.length}개</div>
@@ -772,7 +775,7 @@ export default function App() {
 
         {/* ─── 빈 상태 ─── */}
         {!hasAny&&(
-          <div style={{background:"white",borderRadius:16,padding:"48px 20px",boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3",display:"flex",flexDirection:"column",alignItems:"center",gap:12,color:"#94a3b8"}}>
+          <div className="no-print" style={{background:"white",borderRadius:16,padding:"48px 20px",boxShadow:"0 4px 24px rgba(0,0,0,0.07)",border:"1px solid #e8edf3",display:"flex",flexDirection:"column",alignItems:"center",gap:12,color:"#94a3b8"}}>
             <div style={{fontSize:48,opacity:0.2}}>🔬</div>
             <div style={{fontSize:FS.xl,fontWeight:500,color:"#64748b"}}>슬롯을 클릭하고 약품을 검색하세요</div>
             <div style={{fontSize:FS.base,fontFamily:"monospace",textAlign:"center",lineHeight:2}}>
