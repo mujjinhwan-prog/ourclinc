@@ -42,7 +42,7 @@ export default async function handler(req, res) {
       pageNo: '1',
     });
     const url = 'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params;
-    const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
     if (!r.ok) { console.log('HIRA price fetch failed:', r.status); return []; }
 
     const xml = await r.text();
@@ -70,11 +70,17 @@ export default async function handler(req, res) {
 
   async function callHiraPrice(name) {
     const candidates = buildCandidates(name);
+    // 순차 재시도(직렬)는 후보가 많은 품목에서 4초×N으로 누적되어 Vercel 함수
+    // 실행 제한 시간을 넘겨 타임아웃을 유발했음 → 전부 동시에 병렬 요청으로 전환
+    const settled = await Promise.allSettled(candidates.map(word => queryHira(word)));
+
     let items = [];
     let matchedWord = candidates[0];
-    for (const word of candidates) {
-      items = await queryHira(word);
-      if (items.length > 0) { matchedWord = word; break; }
+    for (let i = 0; i < candidates.length; i++) {
+      const r = settled[i];
+      if (r.status === 'fulfilled' && r.value.length > 0) {
+        items = r.value; matchedWord = candidates[i]; break;
+      }
     }
     if (items.length === 0) { console.log('HIRA price no items for:', name); return null; }
 
