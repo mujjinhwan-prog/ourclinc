@@ -34,8 +34,7 @@ export default async function handler(req, res) {
 
   // ── HIRA 약가기준정보조회서비스: 품목명으로 상한금액(mxCprc) 조회 ───────────
   // https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList (응답 XML 고정)
-  async function callHiraPrice(name) {
-    const word = name.replace(/\(.*?\)/g, '').trim();
+  async function queryHira(word) {
     const params = new URLSearchParams({
       serviceKey: HIRA_KEY,
       itmNm: word,
@@ -44,19 +43,42 @@ export default async function handler(req, res) {
     });
     const url = 'https://apis.data.go.kr/B551182/dgamtCrtrInfoService1.2/getDgamtList?' + params;
     const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    if (!r.ok) { console.log('HIRA price fetch failed:', r.status); return null; }
+    if (!r.ok) { console.log('HIRA price fetch failed:', r.status); return []; }
 
     const xml = await r.text();
     const resultCode = getXmlTag(xml, 'resultCode');
     if (resultCode && resultCode !== '00') {
       console.log('HIRA price API error:', resultCode, getXmlTag(xml, 'resultMsg'));
-      return null;
+      return [];
     }
+    return parseHiraXmlItems(xml);
+  }
 
-    const items = parseHiraXmlItems(xml);
-    if (items.length === 0) { console.log('HIRA price no items for:', word); return null; }
+  // MFDS 품목명과 HIRA 품목명은 단위 표기(밀리그램/mg)나 공백이 달라서
+  // 원본 그대로는 매칭이 안 되는 경우가 있음 → 몇 가지 정규화된 후보로 순차 재시도
+  function buildCandidates(name) {
+    const base = name.replace(/\(.*?\)/g, '').trim(); // 괄호(성분명 등) 제거
+    const mgToKr = base.replace(/(\d)\s*mg\b/gi, '$1밀리그램');
+    const krToMg = base.replace(/(\d+(?:\.\d+)?)\s*밀리그램/g, '$1mg');
+    const noSpace = base.replace(/\s/g, '');
+    // 앞부분(제품명 핵심)만 남긴 후보 — 숫자/단위 앞까지만
+    const coreMatch = base.match(/^[가-힣A-Za-z]+/);
+    const core = coreMatch ? coreMatch[0] : null;
 
-    const keyword = word.replace(/\s/g, '');
+    return [...new Set([base, mgToKr, krToMg, noSpace, core].filter(v => v && v.length >= 2))];
+  }
+
+  async function callHiraPrice(name) {
+    const candidates = buildCandidates(name);
+    let items = [];
+    let matchedWord = candidates[0];
+    for (const word of candidates) {
+      items = await queryHira(word);
+      if (items.length > 0) { matchedWord = word; break; }
+    }
+    if (items.length === 0) { console.log('HIRA price no items for:', name); return null; }
+
+    const keyword = matchedWord.replace(/\s/g, '');
     const best = items.find(it => (it.itmNm || '').replace(/\s/g, '').includes(keyword)) || items[0];
 
     const priceRaw = best.mxCprc;
