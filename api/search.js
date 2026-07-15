@@ -5,18 +5,20 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { query } = req.body;
+  const { query, page } = req.body;
   if (!query) return res.status(400).json({ error: 'query is required' });
+  const pageNo = Math.max(1, parseInt(page) || 1);
+  const PAGE_SIZE = 10; // 초기 노출량 — "더보기"로 다음 페이지를 추가 조회
 
   const MFDS_KEY = process.env.MFDS_API_KEY;
   const AI_KEY   = process.env.ANTHROPIC_API_KEY;
   if (!MFDS_KEY) return res.status(500).json({ error: 'MFDS_API_KEY 없음' });
 
   // ── 식약처 낱알식별 조회 ─────────────────────────────────────────────────────
-  async function callMfds(word, rows = 20) {
+  async function callMfds(word, rows = PAGE_SIZE, pn = 1) {
     const params = new URLSearchParams({
       serviceKey: MFDS_KEY, item_name: word,
-      type: 'json', numOfRows: String(rows), pageNo: '1',
+      type: 'json', numOfRows: String(rows), pageNo: String(pn),
     });
     const r = await fetch(
       'https://apis.data.go.kr/1471000/MdcinGrnIdntfcInfoService03/getMdcinGrnIdntfcInfoList03?' + params,
@@ -59,16 +61,27 @@ export default async function handler(req, res) {
 
   try {
     const q = query.trim();
-    const candidates = [q, q.substring(0,4), q.substring(0,3), q.substring(0,2)]
-      .filter((v,i,a) => v.length >= 2 && a.indexOf(v) === i);
-
     let rawItems = [];
-    for (const word of candidates) {
-      const items = await callMfds(word);
-      const valid = items.filter(it =>
+
+    if (pageNo === 1) {
+      // 1페이지: 검색어가 너무 구체적이라 매칭이 안 될 경우를 대비해
+      // 4자→3자→2자로 점점 줄여가며 결과가 나올 때까지 시도
+      const candidates = [q, q.substring(0,4), q.substring(0,3), q.substring(0,2)]
+        .filter((v,i,a) => v.length >= 2 && a.indexOf(v) === i);
+      for (const word of candidates) {
+        const items = await callMfds(word, PAGE_SIZE, 1);
+        const valid = items.filter(it =>
+          (it.LENG_LONG || it.LNGS_STDR) && (it.LENG_SHORT || it.SHRT_STDR)
+        );
+        if (valid.length > 0) { rawItems = valid; break; }
+      }
+    } else {
+      // 2페이지 이상: 1페이지가 이미 원래 검색어로 성공했다는 뜻이므로
+      // 그대로 다음 페이지만 이어서 조회 (글자 수 축소 재시도 불필요)
+      const items = await callMfds(q, PAGE_SIZE, pageNo);
+      rawItems = items.filter(it =>
         (it.LENG_LONG || it.LNGS_STDR) && (it.LENG_SHORT || it.SHRT_STDR)
       );
-      if (valid.length > 0) { rawItems = valid; break; }
     }
 
     const kw = q.replace(/\s/g,'').substring(0,2);
@@ -84,12 +97,14 @@ export default async function handler(req, res) {
       return (an.startsWith(k)?0:an.includes(k)?1:2)-(bn.startsWith(k)?0:bn.includes(k)?1:2);
     });
 
-    // 슬롯은 8개뿐이므로 결과도 8개로 제한 (보험가는 여기서 조회하지 않음 —
-    // 사용자가 슬롯에 실제로 선택했을 때만 /api/price 로 개별 조회하여
-    // 결과가 많은 성분명 검색에서도 드롭다운이 즉시 뜨도록 함)
-    const mfdsResult = filtered.slice(0, 8).map(normalize);
+    // 보험가는 여기서 조회하지 않음 — 사용자가 슬롯에 실제로 선택했을 때만
+    // /api/price 로 개별 조회하여 결과가 많은 성분명 검색에서도 드롭다운이 즉시 뜨도록 함
+    const mfdsResult = filtered.slice(0, PAGE_SIZE).map(normalize);
 
     if (mfdsResult.length > 0) return res.status(200).json(mfdsResult);
+
+    // 2페이지 이상에서 더 이상 결과가 없으면 그냥 빈 배열 반환 (AI 보완은 1페이지에서만)
+    if (pageNo > 1) return res.status(200).json([]);
 
     // ── AI 낱알식별 보완 ───────────────────────────────────────────────────────
     if (!AI_KEY) return res.status(200).json([]);
