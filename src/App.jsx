@@ -685,15 +685,16 @@ export default function App() {
                 const pillBg=pill?.colorCss||null;
                 return(
                   <div key={idx} className="slot-card" onClick={()=>clickSlot(idx)}
-                    style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",minHeight:288,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"visible"}}
+                    style={{background:pill?"white":isActive?"#eff6ff":"#f8fafc",border:isActive?"2px solid "+color:"1.5px solid #e2e8f0",borderRadius:14,padding:14,cursor:"pointer",transition:"all 0.15s",boxShadow:isActive?"0 0 0 3px "+color+"22":"0 2px 8px rgba(0,0,0,0.05)",height:296,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:pill?"flex-start":"center",gap:6,position:"relative",overflow:"hidden"}}
                     onMouseEnter={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f0f4ff";}}
                     onMouseLeave={e=>{if(!pill&&!isActive)e.currentTarget.style.background="#f8fafc";}}>
                     {pill?(
                       <>
                         <button className="no-print" onClick={e=>removeSlot(e,idx)} style={{position:"absolute",top:8,right:8,background:"none",border:"1px solid #fecaca",borderRadius:4,cursor:"pointer",color:"#dc2626",fontSize:FS.sm,padding:"1px 7px",zIndex:2}}>×</button>
-                        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4}}>
-                          <span style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0,display:"inline-block"}}/>
-                          <span style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"keep-all",textAlign:"center"}}>{pill.name}</span>
+                        {/* 이름 영역: 길이와 상관없이 항상 2줄 높이로 고정 (넘치면 …으로 자름) — 카드 크기가 이름 길이에 따라 흔들리지 않도록 */}
+                        <div style={{display:"flex",alignItems:"flex-start",gap:5,marginTop:4,width:"100%",height:41,justifyContent:"center"}}>
+                          <span style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0,marginTop:5,display:"inline-block"}}/>
+                          <span style={{fontSize:FS.base,fontWeight:700,color,lineHeight:1.3,wordBreak:"keep-all",textAlign:"center",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",textOverflow:"ellipsis"}}>{pill.name}</span>
                         </div>
                         <div className="pill-shape-box" style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:100,overflow:"visible"}}>
                           <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -708,7 +709,7 @@ export default function App() {
                           <span>1cm</span>
                         </div>
                         <div style={{fontSize:FS.xs,color:color,fontWeight:700,fontFamily:"monospace",textAlign:"center"}}>{pill.width}×{pill.height}{pill.thickness?"×"+pill.thickness:""}mm</div>
-                        {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center"}}>제조/판매: {pill.entpName}</div>}
+                        {pill.entpName&&<div style={{fontSize:FS.xs,color:"#94a3b8",textAlign:"center",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>제조/판매: {pill.entpName}</div>}
                         {/* spacer: 약 이름·제조사 줄 수가 달라도 보험가는 항상 카드 맨 아래로 고정 */}
                         <div style={{flex:1}}/>
                         {/* 보험가 슬롯 표시 — "약가제외" 체크 시 화면·인쇄 모두에서 숨김 */}
