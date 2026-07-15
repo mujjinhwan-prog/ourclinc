@@ -90,10 +90,10 @@ function darken(hex, amt=30) {
 
 const ACCENT = ["#3b5bdb","#7048e8","#0ca678","#e67700","#c2255c","#1098ad","#2f9e44","#862e9c"];
 
-async function fetchDrug(query) {
+async function fetchDrug(query, signal) {
   const r = await fetch("/api/search", {
     method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({query})
+    body:JSON.stringify({query}), signal
   });
   if (!r.ok) throw new Error("서버 오류: " + r.status);
   const raw = await r.json();
@@ -119,8 +119,21 @@ async function fetchDrug(query) {
     hiraClass:it.HIRA_CLASS||it.CLASS_NAME||"",
     price:it.PRICE||null,
     priceUnit:it.PRICE_UNIT||"정",
+    priceLoading:false,
 
   }));
+}
+
+async function fetchPrice(itemName) {
+  try {
+    const r = await fetch("/api/price", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({itemName})
+    });
+    if (!r.ok) return {price:null, unit:"정"};
+    const d = await r.json();
+    return {price:d.price||null, unit:d.unit||"정"};
+  } catch(e) { return {price:null, unit:"정"}; }
 }
 
 // ─── 약제 SVG 렌더러 ──────────────────────────────────────────────────────────
@@ -356,7 +369,7 @@ export default function App() {
   const [dpiInfo,setDpiInfo]       = useState("DPI 측정 중...");
   const [ppiInput,setPpiInput]     = useState("");
   const [hidePrice,setHidePrice]   = useState(false);  // 약가제외: 체크 시 화면·인쇄 모두에서 보험가 숨김
-  const debRef=useRef(null), inRef=useRef(null), dropRef=useRef(null);
+  const debRef=useRef(null), inRef=useRef(null), dropRef=useRef(null), abortRef=useRef(null);
 
   // ── 폰트 스케일: 기존 대비 1.5배 ──
   const FS = {
@@ -390,10 +403,21 @@ export default function App() {
     if(!q||q.length<2)return;
     // 범용 키워드 경고: 검색어가 너무 일반적이면 더 구체적으로 유도
     const isBroad = BROAD_KEYWORDS.some(kw => q.replace(/\s/g,"").includes(kw) && q.replace(/\s/g,"").length <= kw.length+2);
+    // 이전 검색이 아직 진행 중이면 취소 — 계속 타이핑할 때 서버 부하/경쟁 상태 방지
+    abortRef.current?.abort();
+    const controller=new AbortController();
+    abortRef.current=controller;
     setLoading(true);setError("");setShowDrop(true);setResults([]);
-    try{const r=await fetchDrug(q);setResults(r);if(!r.length)setError("결과 없음.");}
-    catch(e){setError("조회 실패: "+e.message);}
-    finally{setLoading(false);}
+    try{
+      const r=await fetchDrug(q,controller.signal);
+      setResults(r);
+      if(!r.length)setError(isBroad?"결과 없음. 제품명을 더 구체적으로 입력해보세요.":"결과 없음.");
+    }
+    catch(e){
+      if(e.name==="AbortError")return; // 더 최신 검색으로 대체됨 — 무시
+      setError("조회 실패: "+e.message);
+    }
+    finally{if(abortRef.current===controller)setLoading(false);}
   },[]);
 
   const handleInput=e=>{const v=e.target.value;setQuery(v);clearTimeout(debRef.current);
@@ -403,12 +427,25 @@ export default function App() {
     if(e.key==="Escape")setShowDrop(false);};
   const pick=item=>{
     if(slots.find(s=>s&&s.id===item.id))return;
-    const ns=[...slots];ns[activeSlot]=item;setSlots(ns);
+    const placedSlot=activeSlot;
+    const placed={...item,priceLoading:true};
+    const ns=[...slots];ns[placedSlot]=placed;setSlots(ns);
     let next=-1;
     for(let i=activeSlot+1;i<MAX;i++)if(!ns[i]){next=i;break;}
     if(next===-1)for(let i=0;i<activeSlot;i++)if(!ns[i]){next=i;break;}
     if(next!==-1)setActiveSlot(next);
-    setQuery("");setShowDrop(false);setResults([]);};
+    setQuery("");setShowDrop(false);setResults([]);
+    // 보험가는 슬롯에 실제로 선택된 뒤에만 조회 — 그 사이 슬롯이 바뀌거나
+    // 비워졌으면(id 불일치) 결과를 버리고 반영하지 않음
+    fetchPrice(item.name).then(({price,unit})=>{
+      setSlots(cur=>{
+        if(!cur[placedSlot]||cur[placedSlot].id!==item.id)return cur;
+        const next2=[...cur];
+        next2[placedSlot]={...next2[placedSlot],price,priceUnit:unit,priceLoading:false};
+        return next2;
+      });
+    });
+  };
   const clickSlot=idx=>setActiveSlot(idx);
   const removeSlot=(e,idx)=>{e.stopPropagation();const ns=[...slots];ns[idx]=null;setSlots(ns);setActiveSlot(idx);};
   const resetAll=()=>{setSlots(Array(MAX).fill(null));setActiveSlot(0);setQuery("");setResults([]);setShowDrop(false);};
@@ -435,7 +472,9 @@ export default function App() {
     {label:"제조사/판매사",render:(p)=>(<span style={{fontSize:FS.base,color:"#1a1f36"}}>{p.entpName||"-"}</span>)},
     {label:"크기",render:(p,idx)=>(<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:ACCENT[idx],whiteSpace:"nowrap"}}>{p.width}×{p.height}{p.thickness?"×"+p.thickness:""}mm</span>)},
     {label:"효능군",render:(p)=>p.hiraClass?<span style={{fontSize:FS.base,color:"#64748b",background:"#f1f5f9",padding:"3px 10px",borderRadius:50,whiteSpace:"nowrap"}}>{p.hiraClass}</span>:<span style={{color:"#94a3b8",fontSize:FS.base}}>-</span>},
-    {label:"보험가",render:(p)=>p.price
+    {label:"보험가",render:(p)=>p.priceLoading
+      ?<span style={{color:"#94a3b8",fontSize:FS.base}}>조회 중…</span>
+      :p.price
       ?<span style={{fontFamily:"monospace",fontSize:FS.md,fontWeight:700,color:"#0ca678",whiteSpace:"nowrap"}}>{Number(p.price).toLocaleString()}원/{p.priceUnit||"정"}</span>
       :<span style={{color:"#94a3b8",fontSize:FS.base}}>미등재</span>
     },
@@ -448,6 +487,8 @@ export default function App() {
         @keyframes dropIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
         @keyframes spin{to{transform:rotate(360deg)}}
         *{box-sizing:border-box}
+        html,body{margin:0;padding:0;}
+        #root{width:100%;}
         @media(max-width:640px){
           .sbwrap{flex-wrap:wrap !important;gap:6px !important;}
           .sbinput{min-width:100% !important;order:1}
@@ -484,8 +525,8 @@ export default function App() {
           .app-logo{height:32px !important;}
           .app-header-divider{display:none;}
           .app-header-text{flex:1 1 auto;}
-          .app-header-title{font-size:14px !important;line-height:1.3;}
-          .app-header-sub{font-size:10px !important;line-height:1.4;word-break:keep-all;}
+          .app-header-title{font-size:15px !important;line-height:1.3;}
+          .app-header-sub{font-size:12px !important;line-height:1.4;word-break:keep-all;}
           .app-dpi-badge{font-size:10px !important;padding:3px 7px !important;}
 
           /* 검색창/버튼: 아담하게 축소. 좁은 화면에선 검색창 폭 제한을 풀어 줄바꿈 없이 사용 */
@@ -503,8 +544,8 @@ export default function App() {
           .app-header-inner{height:42px !important;}
           .app-logo{height:26px !important;}
           .app-header-divider{height:22px !important;}
-          .app-header-title{font-size:14px !important;}
-          .app-header-sub{font-size:9px !important;}
+          .app-header-title{font-size:16px !important;}
+          .app-header-sub{font-size:13px !important;}
           .app-dpi-badge{font-size:9px !important;padding:2px 6px !important;}
           .main-content{padding:8px 10px 10px !important;}
           .search-panel{padding:8px 10px !important;margin-bottom:6px !important;}
@@ -641,7 +682,9 @@ export default function App() {
                         {/* spacer: 약 이름·제조사 줄 수가 달라도 보험가는 항상 카드 맨 아래로 고정 */}
                         <div style={{flex:1}}/>
                         {/* 보험가 슬롯 표시 — "약가제외" 체크 시 화면·인쇄 모두에서 숨김 */}
-                        {!hidePrice && (pill.price
+                        {!hidePrice && (pill.priceLoading
+                          ? <div style={{fontSize:FS.xs*2,color:"#94a3b8",flexShrink:0}}>가격 조회 중…</div>
+                          : pill.price
                           ? <div style={{fontSize:FS.xs*2,color:"#0ca678",fontWeight:700,fontFamily:"monospace",background:"#ecfdf5",borderRadius:6,padding:"3px 10px",flexShrink:0}}>
                               💊 {Number(pill.price).toLocaleString()}원/{pill.priceUnit||"정"}
                             </div>
