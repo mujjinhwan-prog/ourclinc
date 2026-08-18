@@ -139,6 +139,30 @@ async function fetchPrice(itemName) {
 // ─── 약제 SVG 렌더러 ──────────────────────────────────────────────────────────
 // X0(좌측), Y0(상단) 패딩으로 약 몸체를 캔버스 중앙에 배치
 // → 가로/세로 치수선 텍스트가 약 자체보다 길어도 잘리지 않음
+// 다각형 꼭짓점을 둥글게 깎은 path 생성 — 실제 알약은 안전/제조 공정상
+// 뾰족한 모서리가 거의 없고 항상 둥글게 라운딩되어 있음(약학정보원 실측 사진 기준)
+function roundedPolyPath(pts, radius) {
+  const n = pts.length;
+  let maxR = Infinity;
+  for (let i=0;i<n;i++){
+    const a=pts[i], b=pts[(i+1)%n];
+    maxR = Math.min(maxR, Math.hypot(b[0]-a[0], b[1]-a[1])/2);
+  }
+  const r = Math.min(radius, maxR*0.9);
+  const norm=([x,y])=>{const len=Math.hypot(x,y)||1;return [x/len,y/len];};
+  let d = "";
+  for (let i=0;i<n;i++){
+    const prev = pts[(i-1+n)%n], cur = pts[i], next = pts[(i+1)%n];
+    const toPrev = norm([prev[0]-cur[0], prev[1]-cur[1]]);
+    const toNext = norm([next[0]-cur[0], next[1]-cur[1]]);
+    const pA = [cur[0]+toPrev[0]*r, cur[1]+toPrev[1]*r];
+    const pB = [cur[0]+toNext[0]*r, cur[1]+toNext[1]*r];
+    d += (i===0?"M":"L")+pA[0].toFixed(1)+","+pA[1].toFixed(1)+" ";
+    d += "Q"+cur[0].toFixed(1)+","+cur[1].toFixed(1)+" "+pB[0].toFixed(1)+","+pB[1].toFixed(1)+" ";
+  }
+  return d+"Z";
+}
+
 function PillShapeEl({ pill, pxPerMm, accentColor }) {
   const wPx = Math.round(pill.width  * pxPerMm);
   const hPx = Math.round(pill.height * pxPerMm);
@@ -269,21 +293,27 @@ function PillShapeEl({ pill, pxPerMm, accentColor }) {
   } else if (pill.shape === "halfcircle") {
     shapePath = `M${X0},${Y0+hPx} Q${X0},${Y0} ${X0+wPx/2},${Y0} Q${X0+wPx},${Y0} ${X0+wPx},${Y0+hPx} Z`;
   } else if (pill.shape === "diamond") {
-    shapePath = `M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx/2} L${X0+wPx/2},${Y0+hPx} L${X0},${Y0+hPx/2} Z`;
+    const pts=[[X0+wPx/2,Y0],[X0+wPx,Y0+hPx/2],[X0+wPx/2,Y0+hPx],[X0,Y0+hPx/2]];
+    shapePath = roundedPolyPath(pts, Math.min(wPx,hPx)*0.13);
   } else if (pill.shape === "pentagon") {
     const cx=X0+wPx/2, cy=Y0+hPx/2, rr=Math.min(wPx,hPx)/2;
-    shapePath = Array.from({length:5},(_,i)=>{
+    const pts=Array.from({length:5},(_,i)=>{
       const a=(i*72-90)*Math.PI/180;
-      return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);
-    }).join(" ")+"Z";
+      return [cx+rr*Math.cos(a), cy+rr*Math.sin(a)];
+    });
+    shapePath = roundedPolyPath(pts, rr*0.16);
   } else if (pill.shape === "hexagon") {
     const cx=X0+wPx/2, cy=Y0+hPx/2, rr=Math.min(wPx,hPx)/2;
-    shapePath = Array.from({length:6},(_,i)=>{
+    const pts=Array.from({length:6},(_,i)=>{
       const a=(i*60-30)*Math.PI/180;
-      return (i===0?"M":"L")+(cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1);
-    }).join(" ")+"Z";
+      return [cx+rr*Math.cos(a), cy+rr*Math.sin(a)];
+    });
+    shapePath = roundedPolyPath(pts, rr*0.16);
   } else if (pill.shape === "triangle") {
-    shapePath = `M${X0+wPx/2},${Y0} L${X0+wPx},${Y0+hPx} L${X0},${Y0+hPx} Z`;
+    // 약학정보원 실측: 삼각형 알약은 뾰족한 꼭짓점 없이 모서리가 둥글게 깎여
+    // 완만한 Reuleaux 삼각형에 가까운 형태 — 곡률 반경을 넉넉하게 적용
+    const pts=[[X0+wPx/2,Y0],[X0+wPx,Y0+hPx],[X0,Y0+hPx]];
+    shapePath = roundedPolyPath(pts, Math.min(wPx,hPx)*0.22);
   } else {
     rx = Math.min(wPx,hPx)*0.15; ry = rx;
   }
